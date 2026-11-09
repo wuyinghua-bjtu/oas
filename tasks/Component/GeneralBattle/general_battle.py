@@ -1,0 +1,782 @@
+# This Python file uses the following encoding: utf-8
+# @author runhey
+# github https://github.com/runhey
+import time
+import random
+from time import sleep
+
+import cv2
+from module.base.timer import Timer
+from module.exception import GameStuckError
+
+from module.base.utils import get_color, color_similar
+from tasks.base_task import BaseTask
+from tasks.Component.GeneralBattle.config_general_battle import GreenMarkType, GeneralBattleConfig
+from tasks.Component.GeneralBattle.assets import GeneralBattleAssets
+from tasks.GameUi.assets import GameUiAssets
+from tasks.Component.GeneralBattle.config_general_battle import GreenMarkType, GeneralBattleConfig
+from tasks.Component.GeneralBuff.config_buff import BuffClass
+from tasks.Component.GeneralBuff.general_buff import GeneralBuff
+
+from module.logger import logger
+
+
+class GeneralBattle(GeneralBuff, GeneralBattleAssets):
+    """
+    使用这个通用的战斗必须要求这个任务的config有config_general_battle
+    """
+
+    def run_general_battle(self, config: GeneralBattleConfig = None, buff: BuffClass or list[BuffClass] = None) -> bool:
+        """
+        运行脚本
+        :return:
+        """
+        logger.hr("General battle start", 2)
+        if config is None:
+            config = GeneralBattleConfig()
+        # 本人选择的策略是只要进来了就算一次，不管是不是打完了
+        # 战斗统计
+        self.current_count += 1
+        logger.info(f"Current count: {self.current_count}")
+        # 战前设置
+        if not self.battle_before(buff, config):
+            raise GameStuckError("Battle preparation timed out before entering combat")
+        # 绿标
+        if self.is_in_battle(False):
+            self.green_mark(config.green_enable, config.green_mark)
+        # 战中设置
+        win = self.battle_wait(config.random_click_swipt_enable)
+        if win:
+            return True
+        else:
+            return False
+
+    def handle_soul_mismatch_dialog(self) -> bool:
+        """Confirm the existing team without changing souls or reminder settings."""
+        if not self.appear(self.I_CONFIRM_CLOSE_DIFF_SOUL):
+            return False
+        self.appear_then_click(self.I_CONFIRM_CLOSE_DIFF_SOUL, interval=0.8)
+        return True
+
+    def battle_result_visible(self) -> bool:
+        return any(self.appear(asset) for asset in (
+            self.I_WIN, self.I_DE_WIN, self.I_FALSE, self.I_REWARD, self.I_REWARD_GOLD))
+
+    def battle_settlement_requires_confirmation(self) -> bool:
+        """Opt in when a task provides a reliable post-battle page check."""
+        return False
+
+    def battle_settlement_return_visible(self) -> bool:
+        """Task-specific positive evidence, never absence of a reward image."""
+        return False
+
+    def finish_battle_settlement(self, win: bool, timeout: float = 30) -> bool:
+        """Dismiss recognized results and confirm the destination on two frames.
+
+        Keep this deadline across animations and clicks. Unknown frames do not
+        authorize clicking or prove completion; a timeout goes through the
+        existing GameStuckError screenshot/restart recovery.
+        """
+        deadline = Timer(timeout).start()
+        return_frames = 0
+        click_count = 0
+        last_state = 'unknown'
+        while True:
+            self.screenshot()
+            if deadline.reached():
+                self.device.save_screenshot(genre='battle_settlement', interval=0)
+                raise GameStuckError(
+                    f'Battle settlement not confirmed within {timeout}s '
+                    f'(state={last_state}, clicks={click_count})')
+
+            # Recognition has no interval: throttled clicks must never make a
+            # still-visible result look as if it has disappeared.
+            action = None
+            if self.appear(self.I_WIN) or self.appear(self.I_DE_WIN):
+                last_state = 'win'
+                action = self.C_WIN_1
+            elif self.appear(self.I_FALSE):
+                last_state = 'loss'
+                action = self.I_FALSE
+            elif any(self.appear(asset) for asset in (
+                    self.I_REWARD, self.I_REWARD_GOLD, self.I_REWARD_STATISTICS)):
+                last_state = 'reward'
+                action = self.C_REWARD_1
+
+            if action is not None:
+                return_frames = 0
+                # Bound ineffective clicks as well as elapsed time, without
+                # clearing the global click watchdog to conceal a stuck page.
+                if click_count < 8 and self.click(action, interval=1.5):
+                    click_count += 1
+            elif self.battle_settlement_return_visible():
+                last_state = 'return_page'
+                return_frames += 1
+                if return_frames >= 2:
+                    logger.info('Battle settlement confirmed on return page (%s)',
+                                'win' if win else 'loss')
+                    return win
+            else:
+                last_state = 'unknown'
+                return_frames = 0
+            sleep(0.3)
+
+    def battle_before(self, buff: BuffClass | list[BuffClass], config: GeneralBattleConfig, timeout: float = 45) -> bool:
+        """战斗前设置
+        :return: True:进入战斗或点击了准备按钮且识别不到准备按钮了 False:超过timeout s还没有进入战斗且没有点击过准备
+        """
+        timeout_timer = Timer(timeout).start()
+        confed = False
+        while not timeout_timer.reached():
+            self.screenshot()
+            if self.handle_soul_mismatch_dialog():
+                continue
+            if self.is_in_real_battle(False) or self.battle_result_visible():
+                return True
+            if self.is_in_prepare(False):  # 战斗准备阶段
+                if not getattr(config, 'lock_team_enable', False):  # 没有锁定阵容
+                    if self.current_count == 1 and not confed:  # 第一次战斗且是本次第一次配置
+                        self.switch_preset_team(config.preset_enable, config.preset_group, config.preset_team)
+                        self.check_and_open_buff(buff)
+                        confed = True
+                # 点击准备(锁定阵容自动点准备,不锁定阵容前面也已经配置完毕需要点准备)
+                if self.appear_then_click(self.I_PREPARE_HIGHLIGHT, interval=0.8):
+                    continue
+                continue
+            # 未知界面, 既不是准备界面也不是战斗界面
+            # logger.info('Wait for preparation page')  # 这玩意刷屏
+            sleep(random.uniform(0.4, 0.8))
+        return False
+
+    def run_general_battle_back(self, config: GeneralBattleConfig = None, exit_four: bool = False) -> bool:
+        """
+        进入挑战然后直接返回
+        :param config:
+        :return:
+        """
+        # 如果没有锁定队伍那么在点击准备后才退出的,退四的话就直接退出
+        if not config.lock_team_enable and not exit_four:
+            # 点击准备按钮
+            self.wait_until_appear(self.I_PREPARE_HIGHLIGHT)
+            while 1:
+                self.screenshot()
+                if self.appear_then_click(self.I_PREPARE_HIGHLIGHT, interval=1.5):
+                    continue
+                if not (self.appear(self.I_PRESET) or self.appear(self.I_PRESET_WIT_NUMBER)):
+                    break
+            logger.info(f"Click {self.I_PREPARE_HIGHLIGHT.name}")
+
+        # 点击返回
+        while 1:
+            self.screenshot()
+            if self.appear_then_click(self.I_EXIT, interval=1.5):
+                continue
+            if self.appear(self.I_EXIT_ENSURE):
+                break
+        logger.info(f"Click {self.I_EXIT.name}")
+
+        # 点击返回确认
+        while 1:
+            self.screenshot()
+            if self.appear_then_click(self.I_EXIT_ENSURE, interval=1.5):
+                continue
+            if self.appear(self.I_FALSE):
+                break
+        logger.info(f"Click {self.I_EXIT_ENSURE.name}")
+
+        # 点击失败确认
+        self.wait_until_appear(self.I_FALSE)
+        while 1:
+            self.screenshot()
+            if self.appear_then_click(self.I_FALSE, interval=1.5):
+                continue
+            if not self.appear(self.I_FALSE):
+                break
+        logger.info(f"Click {self.I_FALSE.name}")
+
+        return True
+
+    def exit_battle(self, skip_first: bool = False) -> bool:
+        """
+        在战斗的时候强制退出战斗
+        :return:
+        """
+        if skip_first:
+            self.screenshot()
+
+        if not self.appear(self.I_EXIT):
+            return False
+
+        # 点击返回
+        logger.info(f"Click {self.I_EXIT.name}")
+        while 1:
+            self.screenshot()
+            if self.appear_then_click(self.I_EXIT, interval=1.5):
+                continue
+            if self.appear(self.I_EXIT_ENSURE):
+                break
+
+        # 点击返回确认
+        while 1:
+            self.screenshot()
+            if self.appear_then_click(self.I_EXIT_ENSURE, interval=1.5):
+                continue
+            if self.appear_then_click(self.I_FALSE, interval=1.5):
+                continue
+            if not self.appear(self.I_EXIT):
+                break
+
+        return True
+
+    def battle_wait(self, random_click_swipt_enable: bool) -> bool:
+        """
+        等待战斗结束 ！！！
+        很重要 这个函数是原先写的， 优化版本在tasks/Secret/script_task下。本着不改动原先的代码的原则，所以就不改了
+        :param random_click_swipt_enable:
+        :return:
+        """
+        # 有的时候是长战斗，需要在设置stuck检测为长战斗
+        # 但是无需取消设置，因为如果有点击或者滑动的话 handle_control_check会自行取消掉
+        self.device.stuck_record_add('BATTLE_STATUS_S')
+        self.device.click_record_clear()
+        # 战斗过程 随机点击和滑动 防封
+        logger.info("Start battle process")
+        win: bool = False
+        auto_mode_confirmed = False
+        preparation_recovery = None
+        while 1:
+            self.screenshot()
+            # A late preset confirmation can still cover the preparation page.
+            # Do not OCR its "preset" label as the combat auto/manual control.
+            if self.handle_soul_mismatch_dialog() or (
+                    not self.is_in_real_battle(False) and
+                    not self.battle_result_visible() and self.is_in_prepare(False)):
+                if preparation_recovery is None:
+                    preparation_recovery = Timer(45).start()
+                if preparation_recovery.reached():
+                    raise GameStuckError("Battle preparation recovery timed out")
+                if not self.appear(self.I_CONFIRM_CLOSE_DIFF_SOUL):
+                    self.appear_then_click(self.I_PREPARE_HIGHLIGHT, interval=0.8)
+                continue
+            # Keep the deadline through unrecognized transition frames.
+            if self.is_in_real_battle(False) or self.battle_result_visible():
+                preparation_recovery = None
+            elif preparation_recovery is not None and preparation_recovery.reached():
+                raise GameStuckError("Battle preparation recovery timed out")
+            # A saved preset can enter battle with the global combat mode left
+            # on manual. In that state no unit acts and the generic five-minute
+            # stuck detector eventually restarts the game. Confirm auto mode at
+            # the start of every battle and switch it on when necessary.
+            if not auto_mode_confirmed and self.is_in_real_battle(False):
+                if self.ocr_appear(GameUiAssets.O_BATTLE_AUTO):
+                    logger.info("Battle auto mode confirmed")
+                    auto_mode_confirmed = True
+                elif self.ocr_appear_click(GameUiAssets.O_BATTLE_HAND, interval=0.8):
+                    logger.info("Battle is in manual mode, switch to auto")
+                    # Input clears the stuck records. Restore the long-battle
+                    # allowance so switching to auto does not impose a 60s limit.
+                    self.device.stuck_record_add('BATTLE_STATUS_S')
+                    continue
+            # 如果出现赢 就点击, 第二个是针对封魔的图片
+            if self.appear(self.I_WIN, threshold=0.8) or self.appear(self.I_DE_WIN):
+                logger.info("Battle result is win")
+                if self.appear(self.I_DE_WIN):
+                    self.ui_click_until_disappear(self.I_DE_WIN)
+                win = True
+                break
+
+            # 如果出现失败 就点击，返回False
+            if self.appear(self.I_FALSE, threshold=0.8):
+                logger.info("Battle result is false")
+                win = False
+                break
+
+            # 如果领奖励
+            if self.appear(self.I_REWARD, threshold=0.6):
+                win = True
+                break
+
+            # 如果领奖励出现金币
+            if self.appear(self.I_REWARD_GOLD, threshold=0.8):
+                win = True
+                break
+            # 如果开启战斗过程随机滑动
+            if random_click_swipt_enable:
+                self.random_click_swipt()
+
+        # Tasks with a positive destination check must not treat a missing
+        # reward template (including a single animation frame) as completion.
+        if self.battle_settlement_requires_confirmation():
+            return self.finish_battle_settlement(win)
+
+        # 再次确认战斗结果
+        logger.info("Reconfirm the results of the battle")
+        while 1:
+            self.screenshot()
+            if win:
+                # 点击赢了
+                action_click = random.choice([self.C_WIN_1, self.C_WIN_2, self.C_WIN_3])
+                if self.appear_then_click(self.I_WIN, action=action_click, interval=0.5):
+                    continue
+                if not self.appear(self.I_WIN):
+                    break
+            else:
+                # 如果失败且 点击失败后
+                if self.appear_then_click(self.I_FALSE, threshold=0.6):
+                    continue
+                if not self.appear(self.I_FALSE, threshold=0.6):
+                    return False
+        # 最后保证能点击 获得奖励
+        if not self.wait_until_appear(self.I_REWARD, wait_time=10):
+            if not self.appear(self.I_STATISTICS):
+                # 有些的战斗没有下面的奖励，所以直接返回
+                logger.info("There is no reward, Exit battle")
+                return win
+        logger.info("Get reward")
+        while 1:
+            self.screenshot()
+            # 如果出现领奖励
+            action_click = random.choice([self.C_REWARD_1, self.C_REWARD_2, self.C_REWARD_3])
+            if (self.appear_then_click(self.I_REWARD, action=action_click, interval=1.5) or
+                self.appear_then_click(self.I_REWARD_GOLD, action=action_click, interval=1.5)#  or
+                # self.appear_then_click(self.I_REWARD_STATISTICS, action=action_click, interval=1.5) or
+                # self.appear_then_click(self.I_REWARD_PURPLE_SNAKE_SKIN, action=action_click, interval=1.5) or
+                # self.appear_then_click(self.I_REWARD_GOLD_SNAKE_SKIN, action=action_click, interval=1.5) or
+                # self.appear_then_click(self.I_REWARD_EXP_SOUL_4, action=action_click, interval=1.5) or
+                # self.appear_then_click(self.I_REWARD_SOUL_5, action=action_click, interval=1.5) or
+                # self.appear_then_click(self.I_REWARD_SOUL_6, action=action_click, interval=1.5)
+                ):
+                continue
+            if self._hook_special_reward():
+                continue
+            if (not self.appear(self.I_REWARD) and
+                not self.appear(self.I_REWARD_GOLD)  # and
+                # not self.appear(self.I_REWARD_STATISTICS) and
+                # not self.appear(self.I_REWARD_PURPLE_SNAKE_SKIN) and
+                # not self.appear(self.I_REWARD_GOLD_SNAKE_SKIN) and
+                # not self.appear(self.I_REWARD_EXP_SOUL_4) and
+                # not self.appear(self.I_REWARD_SOUL_5) and
+                # not self.appear(self.I_REWARD_SOUL_6)
+                ):
+                break
+
+        return win
+
+    def battle_wait_v2(self, random_click_swipt_enable: bool) -> bool:
+        """
+        第二版战斗等待，参考 Orochi 和 Secret 的优化版本。
+        :return: 胜利返回 True，失败返回 False
+        """
+        # 统一点击名称，防止 GameTooManyClickError 误报
+        self.C_REWARD_1.name, self.C_REWARD_2.name, self.C_REWARD_3.name = 'C_REWARD', 'C_REWARD', 'C_REWARD'
+        self.device.stuck_record_add('BATTLE_STATUS_S')
+        self.device.click_record_clear()
+
+        logger.info("Start battle process")
+        while 1:
+            self.screenshot()
+            # 出现赢的鼓，点击直到消失
+            if self.appear_then_click(self.I_WIN, interval=0.8):
+                continue
+            # 逢魔胜利图
+            if self.appear(self.I_DE_WIN):
+                self.ui_click_until_disappear(self.I_DE_WIN)
+                continue
+            if self.appear(self.I_FALSE, threshold=0.8):
+                logger.warning('False battle')
+                self.ui_click_until_disappear(self.I_FALSE)
+                return False
+            appear_ghost, appear_reward, appear_gold = (
+                self.appear(self.I_GREED_GHOST),
+                self.appear(self.I_REWARD),
+                self.appear(self.I_REWARD_GOLD)
+            )
+            if appear_ghost or appear_reward or appear_gold:
+                logger.info('Win battle')
+                timer = Timer(20).start()
+                while 1:
+                    self.screenshot()
+
+                    _appear_ghost, _appear_reward, _appear_gold = (
+                        self.appear(self.I_GREED_GHOST, threshold=0.6),
+                        self.appear(self.I_REWARD),
+                        self.appear(self.I_REWARD_GOLD)
+                    )
+                    # logger.info(f'_appear_ghost: {_appear_ghost} _appear_reward: {_appear_reward} _appear_gold: {_appear_gold}')
+                    if any([_appear_ghost, _appear_reward, _appear_gold]):
+                        action_click = random.choice([self.C_REWARD_1, self.C_REWARD_2, self.C_REWARD_3])
+                        self.click(action_click, interval=1.5)
+                    else:
+                        logger.info('Battle done')
+                        return True
+                    if self._hook_special_reward():
+                        continue
+                    if timer.reached_and_reset():
+                        logger.warning('battle ')
+                        break
+            # 随机滑动
+            if random_click_swipt_enable:
+                self.random_click_swipt()
+        return False
+
+    def _hook_special_reward(self) -> bool:
+        """
+        For overwrite https://github.com/runhey/OnmyojiAutoScript/issues/1580
+        """
+        return False
+
+    def green_mark(self, enable: bool = False, mark_mode: GreenMarkType = GreenMarkType.GREEN_MAIN):
+        """
+        绿标， 如果不使能就直接返回
+        :param enable:
+        :param mark_mode:
+        :return:
+        """
+        if enable:
+            logger.info("Green is enable")
+            x, y = None, None
+            match mark_mode:
+                case GreenMarkType.GREEN_LEFT1:
+                    x, y = self.C_GREEN_LEFT_1.coord()
+                    logger.info("Green left 1")
+                case GreenMarkType.GREEN_LEFT2:
+                    x, y = self.C_GREEN_LEFT_2.coord()
+                    logger.info("Green left 2")
+                case GreenMarkType.GREEN_LEFT3:
+                    x, y = self.C_GREEN_LEFT_3.coord()
+                    logger.info("Green left 3")
+                case GreenMarkType.GREEN_LEFT4:
+                    x, y = self.C_GREEN_LEFT_4.coord()
+                    logger.info("Green left 4")
+                case GreenMarkType.GREEN_LEFT5:
+                    x, y = self.C_GREEN_LEFT_5.coord()
+                    logger.info("Green left 5")
+                case GreenMarkType.GREEN_MAIN:
+                    x, y = self.C_GREEN_MAIN.coord()
+                    logger.info("Green main")
+
+            # 等待那个准备的消失
+            while 1:
+                self.screenshot()
+                if not self.appear(self.I_PREPARE_HIGHLIGHT):
+                    break
+
+            # 判断有无坐标的偏移
+            self.appear_then_click(self.I_LOCAL)
+            time.sleep(0.3)
+            # 点击绿标
+            self.device.click(x, y)
+
+    def switch_preset_team(self, enable: bool = False, preset_group: int = 1, preset_team: int = 1):
+        """
+        切换预设的队伍， 要求是在不锁定队伍时的情况下
+        :param enable:
+        :param preset_group:
+        :param preset_team:
+        :return:
+        """
+        if not enable:
+            logger.info("Preset is disable")
+            return None
+
+        logger.info("Preset is enable")
+        # 点击预设按钮
+        while 1:
+            self.screenshot()
+
+            if self.appear(self.I_PRESET_ENSURE):
+                break
+            # 首个队伍没有满足5个式神，未出现预设按钮的情况下跳出循环
+            if self.appear(self.I_PRESENT_LESS_THAN_5):
+                break
+            if self.appear_then_click(self.I_PRESET, threshold=0.8, interval=1):
+                continue
+            if self.appear_then_click(self.I_PRESET_WIT_NUMBER, threshold=0.8, interval=1):
+                continue
+            if self.ocr_appear(self.O_PRESET):
+                self.click(self.O_PRESET, interval=1)
+                continue
+            if self.ocr_appear(self.O_PRESET_FULL):
+                self.click(self.O_PRESET_FULL, interval=1)
+                continue
+        logger.info("Click preset button")
+
+        def get_unselect_color(tmp1, tmp2, tmp3, size):
+            # 获取未选择分组的颜色，3组之中必定存在两个颜色相似
+            # area 参数格式是（x1,y1,x2,y2）
+            color_1 = get_color(self.device.image,
+                                (tmp1.roi_back[0], tmp1.roi_back[1],
+                                 tmp1.roi_back[0] + size[0], tmp1.roi_back[1] + size[1]))
+            color_2 = get_color(self.device.image,
+                                (tmp2.roi_back[0], tmp2.roi_back[1],
+                                 tmp2.roi_back[0] + size[0], tmp2.roi_back[1] + size[1]))
+            color_3 = get_color(self.device.image,
+                                (tmp3.roi_back[0], tmp3.roi_back[1],
+                                 tmp3.roi_back[0] + size[0], tmp3.roi_back[1] + size[1]))
+
+            if color_similar(color_1, color_2):
+                return color_1
+            if color_similar(color_2, color_3):
+                return color_2
+            return color_3
+
+        # 选择预设组
+        tmp = self.__getattribute__("C_PRESET_GROUP_" + str(preset_group))
+        if tmp is None:
+            tmp = self.C_PRESET_GROUP_1
+        color_size = [self.C_PRESET_GROUP_1.roi_back[2],
+                      self.C_PRESET_GROUP_1.roi_back[3]]
+        # unselected_color = get_unselect_color(self.C_PRESET_GROUP_1, self.C_PRESET_GROUP_2, self.C_PRESET_GROUP_3, size=color_size)
+        # 考虑到有些预设组没有预设，所以这里取一个比较固定的颜色
+        unselected_color = (224.9, 208.3, 187.4)
+        while True:
+            self.screenshot()
+            color_tmp = get_color(self.device.image,
+                                  (tmp.roi_back[0], tmp.roi_back[1], tmp.roi_back[0] + color_size[0],
+                                   tmp.roi_back[1] + color_size[1]))
+            if color_similar(color_tmp, unselected_color):
+                self.click(tmp, interval=0.2)
+                continue
+            break
+
+        logger.info("Select preset group")
+
+        # 选择预设的队伍
+        time.sleep(0.5)
+        tmp = self.__getattribute__("C_PRESET_TEAM_" + str(preset_team))
+        if tmp is None:
+            tmp = self.C_PRESET_TEAM_1
+        color_size = [5, 5]
+        # unselected_color = get_unselect_color(self.C_PRESET_TEAM_1, self.C_PRESET_TEAM_2, self.C_PRESET_TEAM_3, size=color_size )
+        unselected_color = (216.8, 185.0, 146.8)
+        while True:
+            self.screenshot()
+            color_tmp = get_color(self.device.image,
+                                  (tmp.roi_back[0], tmp.roi_back[1], tmp.roi_back[0] + color_size[0],
+                                   tmp.roi_back[1] + color_size[1]))
+            if color_similar(color_tmp, unselected_color):
+                self.click(tmp, interval=0.2)
+                continue
+            break
+
+        self.click(tmp)
+        logger.info("Select preset team")
+
+        # 点击预设确认
+        self.wait_until_appear(self.I_PRESET_ENSURE, wait_time=1)
+        click_timer = Timer(10).start()
+        while 1:
+            self.screenshot()
+            if click_timer.reached():
+                logger.warning("Switch preset failure")
+            if not self.appear(self.I_PRESET_ENSURE):
+                break
+            if self.appear_then_click(self.I_PRESET_ENSURE, threshold=0.8, interval=1):
+                continue
+        logger.info("Click preset ensure")
+        return None
+
+    def random_click_swipt(self):
+        if 0 <= random.randint(0, 500) <= 3:  # 百分之4的概率
+            rand_type = random.randint(0, 2)
+            match rand_type:
+                case 0:
+                    self.click(self.C_RANDOM_CLICK, interval=20)
+                case 1:
+                    self.swipe(self.S_BATTLE_RANDOM_LEFT, interval=20)
+                case 2:
+                    self.swipe(self.S_BATTLE_RANDOM_RIGHT, interval=20)
+            # 重新设置为长战斗
+            # self.device.stuck_record_add('BATTLE_STATUS_S')
+        else:
+            time.sleep(0.4)  # 这样的好像不对
+
+    # 判断是否在战斗中
+    def is_in_battle(self, is_screenshot: bool = True) -> bool:
+        """
+        判断是否在战斗中
+        tip: 因为有friends判别, 所以即使在准备界面也会识别在战斗中
+        :return:
+        """
+        if is_screenshot:
+            self.screenshot()
+        if self.appear(self.I_BATTLE_INFO) or \
+                self.appear(self.I_FRIENDS) or \
+                self.appear(self.I_WIN) or \
+                self.appear(self.I_FALSE) or \
+                self.appear(self.I_REWARD):
+            return True
+        else:
+            return False
+
+    def is_in_real_battle(self, is_screenshot: bool = True):
+        """
+        判断是否在真正的战斗中(不是战斗准备界面也不是战斗结束界面)
+        :param is_screenshot:
+        :return:
+        """
+        if is_screenshot:
+            self.screenshot()
+        return self.appear(self.I_BATTLE_INFO)
+
+    def is_in_prepare(self, is_screenshot: bool = True) -> bool:
+        """
+        判断是否在准备中
+        :return:
+        """
+        if is_screenshot:
+            self.screenshot()
+        if self.appear(self.I_BUFF):
+            return True
+        elif self.appear(self.I_PREPARE_HIGHLIGHT):
+            return True
+        elif self.appear(self.I_PREPARE_DARK):
+            return True
+        elif self.appear(self.I_PRESET) or self.appear(self.I_PRESET_WIT_NUMBER):
+            return True
+        else:
+            return False
+
+    def check_take_over_battle(self, is_screenshot: bool, config: GeneralBattleConfig) -> bool or None:
+        """
+        中途接入战斗，并且接管
+        :return:  赢了返回True， 输了返回False, 不是在战斗中返回None
+        """
+        if is_screenshot:
+            self.screenshot()
+        if not self.is_in_battle():
+            return None
+
+        return self.run_general_battle(config=config)
+
+    def check_lock(self, enable: bool, lock_image, unlock_image):
+        """
+        检测是否锁定队伍，
+        :param enable:
+        :param lock_image:
+        :param unlock_image:
+        :return:
+        """
+        if enable:
+            logger.info("Lock team")
+            while 1:
+                self.screenshot()
+                if self.appear(lock_image):
+                    break
+                if self.appear_then_click(unlock_image, interval=1):
+                    continue
+        else:
+            logger.info("Unlock team")
+            while 1:
+                self.screenshot()
+                if self.appear(unlock_image):
+                    break
+                if self.appear_then_click(lock_image, interval=1):
+                    continue
+
+    def check_and_open_buff(self, buff: BuffClass or list[BuffClass] = None):
+        """
+        检测是否开启buff
+        :param buff:
+        :return:
+        """
+        if not buff:
+            return
+        logger.info(f'Open buff {buff}')
+        self.ui_click(self.I_BUFF, self.I_CLOUD, interval=2)
+        if isinstance(buff, BuffClass):
+            buff = [buff]
+        match_method = {
+            BuffClass.AWAKE: (self.awake, True),
+            BuffClass.SOUL: (self.soul, True),
+            BuffClass.GOLD_50: (self.gold_50, True),
+            BuffClass.GOLD_100: (self.gold_100, True),
+            BuffClass.EXP_50: (self.exp_50, True),
+            BuffClass.EXP_100: (self.exp_100, True),
+            BuffClass.AWAKE_CLOSE: (self.awake, False),
+            BuffClass.SOUL_CLOSE: (self.soul, False),
+            BuffClass.GOLD_50_CLOSE: (self.gold_50, False),
+            BuffClass.GOLD_100_CLOSE: (self.gold_100, False),
+            BuffClass.EXP_50_CLOSE: (self.exp_50, False),
+            BuffClass.EXP_100_CLOSE: (self.exp_100, False),
+        }
+        for b in buff:
+            func, is_open = match_method[b]
+            func(is_open)
+            time.sleep(0.1)
+        logger.info(f'Open buff success')
+        while 1:
+            self.screenshot()
+            if not self.appear(self.I_CLOUD):
+                break
+            if self.appear_then_click(self.I_BUFF, interval=1):
+                continue
+
+    def boss_mark(self, enable=True) -> bool:
+        if not enable or self._boss_mark_flag:
+            return False
+        if self.ocr_appear(self.O_BOSS_MARK):
+            self.screenshot()
+            if self.ocr_appear(self.O_BOSS_MARK):
+                self._boss_mark_flag = True
+                logger.info('Boss marked')
+                self.device.stuck_record_add('BATTLE_STATUS_S')
+                return True
+        if self.device.click_record.count(str(self.O_BOSS_MARK)) >= 3:
+            self._boss_mark_flag = True
+            logger.info('Boss mark skipped due to maybe no boss')
+            self.device.stuck_record_add('BATTLE_STATUS_S')
+            return False
+        if self.click(self.O_BOSS_MARK, interval=1.8):
+            return False
+        return False
+
+    def boss_mark_reset(self):
+        self._boss_mark_flag = False
+
+
+if __name__ == '__main__':
+    from module.config.config import Config
+    from module.device.device import Device
+
+    c = Config('oas1')
+    d = Device(c)
+    t = GeneralBattle(c, d)
+    self = t
+    # t.check_buff([BuffClass.EXP_50, BuffClass.GOLD_50])
+
+    img = cv2.imread(r"E:\preset3.png")
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    self.device.image = img
+
+
+    def get_unselect_color(tmp1, tmp2, tmp3, size):
+        # 获取未选择分组的颜色，3组之中必定存在两个颜色相似
+        # area 参数格式是（x1,y1,x2,y2）
+        color_1 = get_color(self.device.image,
+                            (tmp1.roi_back[0], tmp1.roi_back[1],
+                             tmp1.roi_back[0] + size[0], tmp1.roi_back[1] + size[1]))
+        color_2 = get_color(self.device.image,
+                            (tmp2.roi_back[0], tmp2.roi_back[1],
+                             tmp2.roi_back[0] + size[0], tmp2.roi_back[1] + size[1]))
+        color_3 = get_color(self.device.image,
+                            (tmp3.roi_back[0], tmp3.roi_back[1],
+                             tmp3.roi_back[0] + size[0], tmp3.roi_back[1] + size[1]))
+
+        if color_similar(color_1, color_2):
+            return color_1
+        if color_similar(color_2, color_3):
+            return color_2
+        return color_3
+
+
+    color_size = [self.C_PRESET_GROUP_1.roi_back[2],
+                  self.C_PRESET_GROUP_1.roi_back[3]]
+    unselected_color = get_unselect_color(self.C_PRESET_GROUP_1, self.C_PRESET_GROUP_2, self.C_PRESET_GROUP_3,
+                                          size=color_size)
+    print("")
+    color_size = [5, 5]
+    unselected_color = get_unselect_color(self.C_PRESET_TEAM_1, self.C_PRESET_TEAM_2, self.C_PRESET_TEAM_3,
+                                          size=color_size
+                                          )
+    print("")

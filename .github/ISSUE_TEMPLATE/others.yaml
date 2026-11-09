@@ -1,0 +1,11 @@
+name: 🎈其他相关
+title: "🎈"
+description: 确定不是其他三种类型，同 oas 相关的一切
+labels: [ "other" ]
+body:
+  - type: textarea
+    id: additional
+    attributes:
+      label: 描述
+    validations:
+      required: false

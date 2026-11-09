@@ -1,0 +1,38 @@
+[
+  {
+    "itemName": "utilize_friend_list_title",
+    "roiFront": "730,100,295,46",
+    "roiBack": "730,100,295,46",
+    "mode": "Single",
+    "method": "Default",
+    "keyword": "进入好友结界寄养式神",
+    "description": "好友寄养列表标题，未选择好友时也可识别"
+  },
+  {
+    "itemName": "utilize_res_time",
+    "roiFront": "1140,117,100,30",
+    "roiBack": "1140,117,100,30",
+    "mode": "Duration",
+    "method": "Default",
+    "keyword": "",
+    "description": "仅右侧我的寄养剩余时间，不读取中间好友寄养"
+  },
+  {
+    "itemName": "box_exp",
+    "roiFront": "654,538,179,39",
+    "roiBack": "654,538,179,39",
+    "mode": "DigitCounter",
+    "method": "Default",
+    "keyword": "",
+    "description": "今日已领取经验"
+  },
+  {
+    "itemName": "card_num",
+    "roiFront": "800,421,150,33",
+    "roiBack": "800,421,150,33",
+    "mode": "Single",
+    "method": "Default",
+    "keyword": "",
+    "description": "斗鱼或太古寄养数目"
+  }
+]
