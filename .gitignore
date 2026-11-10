@@ -1,4 +1,7 @@
 ### AzurLaneAutoScript
+/config/
+/share-review/
+/.github/workflows/assets/
 log
 config/backup/*
 config/*.ini

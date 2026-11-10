@@ -13,13 +13,13 @@ class ExecutionError(Exception):
 
 class ConfigModel:
     # Git
-    Repository: str = "https://gitcode.com/OnmyojiAutoScript/OnmyojiAutoScript.git"
+    Repository: str = "https://github.com/wuyinghua-bjtu/oas.git"
     Branch: str = "master"
     GitExecutable: str = "./toolkit/Git/mingw64/bin/git.exe"
     GitProxy: Optional[str] = None
-    SSLVerify: bool = False
-    AutoUpdate: bool = True
-    KeepLocalChanges: bool = False
+    SSLVerify: bool = True
+    AutoUpdate: bool = False
+    KeepLocalChanges: bool = True
 
     # Python
     PythonExecutable: str = "./toolkit/python.exe"
@@ -29,8 +29,8 @@ class ConfigModel:
 
     # Adb
     AdbExecutable: str = "./toolkit/Lib/site-packages/adbutils/binaries/adb.exe"
-    ReplaceAdb: bool = True
-    AutoConnect: bool = True
+    ReplaceAdb: bool = False
+    AutoConnect: bool = False
     InstallUiautomator2: bool = True
 
     # Ocr
@@ -40,9 +40,9 @@ class ConfigModel:
     OcrClientAddress: str = "127.0.0.1:22268"
 
     # Update
-    EnableReload: bool = True
+    EnableReload: bool = False
     CheckUpdateInterval: int = 5
-    AutoRestartTime: str = "03:50"
+    AutoRestartTime: Optional[str] = None
 
     # Misc
     DiscordRichPresence: bool = False
@@ -54,8 +54,8 @@ class ConfigModel:
     SSHExecutable: Optional[str] = None
 
     # Webui
-    WebuiHost: str = "0.0.0.0"
-    WebuiPort: int = 22267
+    WebuiHost: str = "127.0.0.1"
+    WebuiPort: int = 22288
     Language: str = "en-US"
     Theme: str = "default"
     DpiScaling: bool = True
@@ -95,7 +95,7 @@ class DeployConfig(ConfigModel):
         # https://e.coding.net/onmyojiautoscript/oas/OnmyojiAutoScript.git
         # 2025.09.01 腾讯coding跑路了
         if self.config["Repository"].startswith("https://e.coding.net/"):
-            self.config["Repository"] = "https://gitcode.com/OnmyojiAutoScript/OnmyojiAutoScript.git"
+            self.config["Repository"] = "https://github.com/wuyinghua-bjtu/oas.git"
 
         for key, value in self.config.items():
             if hasattr(self, key):
