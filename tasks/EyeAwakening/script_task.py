@@ -20,7 +20,7 @@ from tasks.EyeAwakening.notification import notify_completion
 from tasks.EyeAwakening.profile import PROFILES, validate_profile
 from tasks.FindJade.script_task import ScriptTask as FindJadeTask
 from tasks.GameUi.page import page_awake_zones, page_exploration, page_main
-from tasks.GuildQuickParticipation.policy import select_accounts
+from tasks.EyeAwakening.config import resolve_eye_accounts
 from tasks.MetaDemon.assets import MetaDemonAssets as MD
 
 
@@ -246,10 +246,8 @@ class ScriptTask(EvoTask):
                 validate_profile(self.config)
             except Exception as error:
                 raise ScriptEnd('小号设备隔离检查失败：' + str(error)) from error
-        selection = self.config.model.guild_quick_participation.guild_accounts
         try:
-            accounts = select_accounts(self.config.find_jade.sup_account_list,
-                                       selection.characters, selection.server)
+            accounts = resolve_eye_accounts(self.config.model.eye_awakening)
         except ValueError as error:
             self.config.model.eye_awakening.scheduler.enable = False
             self.config.save()
@@ -258,9 +256,11 @@ class ScriptTask(EvoTask):
         directory = Path('log/EyeAwakening') / self.config.config_name
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / (today + '.json')
+        servers = list(dict.fromkeys(account.svr for account in accounts))
+        server_key = servers[0] if len(servers) == 1 else '\n'.join(servers)
         state = json.loads(path.read_text(encoding='utf8')) if path.exists() else {
-            'date': today, 'server': selection.server, 'accounts': {}, 'status': '运行中'}
-        if state.get('server') != selection.server:
+            'date': today, 'server': server_key, 'accounts': {}, 'status': '运行中'}
+        if state.get('server') != server_key:
             self.config.model.eye_awakening.scheduler.enable = False
             self.config.save()
             raise ScriptEnd('当天记录的服务器与当前配置不符')

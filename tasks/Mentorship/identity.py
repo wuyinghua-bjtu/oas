@@ -1,10 +1,11 @@
 """Conservative identification of the configured apprentice in a list."""
+from module.config.local_values import local_text
 from pathlib import Path
 import cv2
 import numpy as np
 
 
-DEFAULT_NAME = '冥界画师03'
+DEFAULT_NAME = local_text('LOCAL_OCR_NAME03')
 
 
 def guard_room_has_apprentice(image, name, read_name=None):
@@ -43,7 +44,7 @@ def normal_rooms_have_pair(mentor_image, apprentice_image, name, read_name=None)
             observed.append(names)
         # On the leader's screen the floating friend badge can cover the
         # leader nickname. The guest's screen independently shows both names.
-        if observed[1].count('OASPlayer') != 1:
+        if observed[1].count(local_text('LOCAL_SUPPORT_')) != 1:
             return False
         return True
     root = Path(__file__).parent / 'assets'

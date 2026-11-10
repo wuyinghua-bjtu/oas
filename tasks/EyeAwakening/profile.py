@@ -1,4 +1,5 @@
 """Fixed, isolated profiles for the three single-account farming workers."""
+from module.config.local_values import local_text
 import asyncio
 import json
 import subprocess
@@ -13,11 +14,11 @@ from module.exception import RequestHumanTakeover
 
 PROFILES = {
     'oas_eye_1': {'window': 'MuMu安卓设备-1', 'serial': '127.0.0.1:16416', 'vm': 'MuMuPlayer-15.0-1', 'index': '1',
-                  'characters': ('OASPlayer001', 'OASPlayer002', 'OASPlayer003', 'OASPlayer004')},
+                  'characters': (local_text('LOCAL_SUPPORT_001'), local_text('LOCAL_SUPPORT_002'), local_text('LOCAL_SUPPORT_003'), local_text('LOCAL_SUPPORT_004'))},
     'oas_eye_2': {'window': 'MuMu安卓设备-1-1', 'serial': '127.0.0.1:16448', 'vm': 'MuMuPlayer-15.0-2', 'index': '2',
-                  'characters': ('OASPlayer005', 'OASPlayer006', 'OASPlayer007', 'OASPlayer008')},
+                  'characters': (local_text('LOCAL_SUPPORT_005'), local_text('LOCAL_SUPPORT_006'), local_text('LOCAL_SUPPORT_007'), local_text('LOCAL_SUPPORT_008'))},
     'oas_eye_3': {'window': 'MuMu安卓设备-1-2', 'serial': '127.0.0.1:16480', 'vm': 'MuMuPlayer-15.0-3', 'index': '3',
-                  'characters': ('OASPlayer009', 'OASPlayer010', 'OASPlayer011', 'OASMain2')},
+                  'characters': (local_text('LOCAL_SUPPORT_009'), local_text('LOCAL_SUPPORT_010'), local_text('LOCAL_SUPPORT_011'), local_text('LOCAL_PARTNER2'))},
 }
 MANAGER = Path('C:/Program Files/Netease/MuMu/nx_main/MuMuManager.exe')
 
@@ -27,10 +28,12 @@ def validate_profile(config):
     device = config.model.script.device
     if (device.handle, device.serial, device.emulatorinfo_name) != (spec['window'], spec['serial'], spec['vm']):
         raise RequestHumanTakeover('配置与指定模拟器绑定不符，停止启动')
-    names = [s.strip() for s in str(config.model.guild_quick_participation.guild_accounts.characters)
-             .replace('，', ',').replace(',', '\n').splitlines() if s.strip()]
-    if tuple(names) != spec['characters']:
-        raise RequestHumanTakeover('小号分组名单已变化，停止启动以免重复刷号')
+    from tasks.EyeAwakening.config import resolve_eye_accounts
+    try:
+        accounts = resolve_eye_accounts(config.model.eye_awakening)
+    except ValueError as error:
+        raise RequestHumanTakeover(str(error)) from error
+    identities = {(account.svr, account.character) for account in accounts}
     try:
         inventory = json.loads(subprocess.check_output(
             [str(MANAGER), 'info', '-v', 'all'], timeout=10,
@@ -52,6 +55,12 @@ def validate_profile(config):
                 continue
             path = Path('config') / (name + '.json')
             raw = json.loads(path.read_text(encoding='utf8'))
+            if name in PROFILES:
+                slots = raw.get('eye_awakening', {})
+                other_identities = {(str(item.get('svr', '')).strip(), str(item.get('character', '')).strip())
+                                    for key, item in slots.items() if key.startswith('eye_account_')}
+                if identities & other_identities:
+                    raise RequestHumanTakeover(f'{name} 与当前配置存在重复小号，请调整裂变之眼账号分组')
             other = raw.get('script', {}).get('device', {})
             if other.get('handle') == spec['window'] or other.get('serial') == spec['serial']:
                 competing.append(name)

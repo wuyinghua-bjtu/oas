@@ -1,4 +1,5 @@
 """Apprentice solo soul floor one, with crash-safe confirmed-win accounting."""
+from module.config.local_values import local_text
 import json
 import hashlib
 import os
@@ -121,7 +122,7 @@ def _save(path, record):
     os.replace(temp, path)
 
 
-def run_apprentice_souls(config, device, rounds=15, day=None, character='OASPlayer004', server='砂狐乐园'):
+def run_apprentice_souls(config, device, rounds=15, day=None, character=local_text('LOCAL_SUPPORT_004'), server='砂狐乐园'):
     if config.config_name != 'oas_leveling' or rounds != 15:
         raise ValueError('徒弟御魂配置不匹配')
     day = day or date.today()
@@ -130,7 +131,7 @@ def run_apprentice_souls(config, device, rounds=15, day=None, character='OASPlay
     path = directory / ('souls_' + day.isoformat() + '_' + identity + '.json')
     legacy = directory / ('souls_' + day.isoformat() + '.json')
     if (not path.exists() and day.isoformat() == '2026-11-03'
-            and character == 'OASPlayer004' and server == '砂狐乐园' and legacy.exists()):
+            and character == local_text('LOCAL_SUPPORT_004') and server == '砂狐乐园' and legacy.exists()):
         # This day's legacy run was observed on this specific apprentice.
         old = json.loads(legacy.read_text(encoding='utf-8'))
         old.update(character=character, server=server)

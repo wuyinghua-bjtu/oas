@@ -1,4 +1,5 @@
 """Read stable card text with per-slot fallback for the current bounty skin."""
+from module.config.local_values import local_text
 from tasks.FindJade.black_gold import *
 from module.atom.click import RuleClick
 from time import sleep
@@ -44,7 +45,7 @@ def read_cooperation_info(self,inspect_realworld=False):
                     completed=True
                     button=None
                 elif '自己击败' in identity and '好友击败' in identity and any(
-                        name in claimtext or name in identity for name in ('OASPlayer','OASMain')):
+                        name in claimtext or name in identity for name in (local_text('LOCAL_SUPPORT_'),local_text('LOCAL_PARTNER'))):
                     already_shared=True
                     button=SHARED[n]
                 else:

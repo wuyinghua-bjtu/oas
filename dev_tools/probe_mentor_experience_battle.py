@@ -1,5 +1,6 @@
 """Authorized single experience or gold battle with master-only buffs."""
 import sys
+from module.config.local_values import local_text
 from module.config.config import Config
 from tasks.Mentorship.device import BoundDevice, validate_profiles
 from tasks.Mentorship.buff_device import MasterBuffs
@@ -15,7 +16,7 @@ mc, ac = Config('oas1'), Config('oas_leveling')
 validate_profiles(mc, ac)
 m, a = BoundDevice(mc), BoundDevice(ac)
 ui, room = GameUi(mc, m), GeneralRoom(mc, m)
-pair, buffs = NormalDevices(m, a, '冥界画师03'), MasterBuffs(m)
+pair, buffs = NormalDevices(m, a, local_text('LOCAL_OCR_NAME03')), MasterBuffs(m)
 enabled, in_room, started = [], False, False
 activity = sys.argv[1] if len(sys.argv) > 1 else 'experience'
 if activity not in ('experience', 'gold'):

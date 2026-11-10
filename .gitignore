@@ -1,7 +1,25 @@
 ### AzurLaneAutoScript
 /config/
+/work/
 /share-review/
-/.github/workflows/assets/
+/private/
+/dev_tools/fixtures/
+/.github/workflows/
+/tasks/**/*.png
+/tasks/Hyakkiyakou/temp/
+/tasks/BondlingFairyland/invite/select_friend_off.png
+/tasks/BondlingFairyland/invite/select_friend_on.png
+/tasks/Component/SwitchAccount/res/sa_ming_character.png
+/tasks/Component/Costume/main1/image_name.png
+/tasks/GameUi/page/image_name.png
+/tasks/KittyShop/ks/image_name.png
+/tasks/WantedQuests/invite/wq_invite_friend_list_appear.png
+*.pre-*.png
+*.bak
+*.local.json
+*.local.yaml
+.env.*
+!.env.example
 log
 config/backup/*
 config/*.ini

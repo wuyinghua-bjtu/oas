@@ -1,5 +1,6 @@
 """Run the explicitly bound mentorship workflow under emulator safeguards."""
 import json
+from module.config.local_values import local_text
 import subprocess
 import psutil
 from module.config.config import Config
@@ -32,13 +33,13 @@ devices[1].screenshot()
 if detect(devices[1].image, 'guard_entry') and not leave_activity_menu(devices[1]):
     raise RuntimeError('无法退出徒弟妖气探索页面')
 participant.step('确认徒弟身份', 90)
-if participant.nickname() != 'OASPlayer004':
+if participant.nickname() != local_text('LOCAL_SUPPORT_004'):
     raise RuntimeError('徒弟角色不匹配')
 leader = Participant(configs[0], devices[0])
 devices[0].screenshot()
 if detect(devices[0].image, 'guard_entry') and not leave_activity_menu(devices[0]):
     raise RuntimeError('无法退出师父妖气探索页面')
 leader.step('确认师父身份', 90)
-if leader.nickname() != 'OASPlayer':
+if leader.nickname() != local_text('LOCAL_SUPPORT_'):
     raise RuntimeError('师父角色不匹配')
-run_verified_daily(configs[0], devices[0], devices[1], 'OASPlayer004', apprentice_config=configs[1])
+run_verified_daily(configs[0], devices[0], devices[1], local_text('LOCAL_SUPPORT_004'), apprentice_config=configs[1])

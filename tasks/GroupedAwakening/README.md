@@ -2,14 +2,14 @@
 
 独立任务 `GroupedAwakening` 使用 `oas_leveling` 的三个模拟器，执行火麒麟十层。当前分组为：
 
-1. OASPlayer003、OASPlayer002、OASPlayer001
-2. OASPlayer004、OASPlayer005、OASPlayer006
-3. OASPlayer007、OASPlayer008、OASPlayer009
-4. OASPlayer010、OASPlayer011、OASMain2
+1. LOCAL_SUPPORT_003、LOCAL_SUPPORT_002、LOCAL_SUPPORT_001
+2. LOCAL_SUPPORT_004、LOCAL_SUPPORT_005、LOCAL_SUPPORT_006
+3. LOCAL_SUPPORT_007、LOCAL_SUPPORT_008、LOCAL_SUPPORT_009
+4. LOCAL_SUPPORT_010、LOCAL_SUPPORT_011、LOCAL_PARTNER2
 
-每组目标为 15 场胜利；战斗失败时记录本组结果并继续下一组。每场及中断状态保存在 `log/GroupedAwakening/oas_leveling/`，完成的组不会重新刷。OASMain2 从寻找协作的小号列表读取账号信息，独立寮活动仍使用其自己的角色名单。
+每组目标为 15 场胜利；战斗失败时记录本组结果并继续下一组。每场及中断状态保存在 `log/GroupedAwakening/oas_leveling/`，完成的组不会重新刷。最后一位协作账号从寻找协作的小号列表读取，独立寮活动仍使用其自己的角色名单。公开角色键在 `config/local_values.json` 中映射到本地角色。
 
-2026-11-01 的任务已暂停：第一组 15/15，第二组 14/15（第 15 场失败），第三组 15/15，第四组尚未开战。第四组增加 OASMain2 时保留了前三组记录。继续时先核对窗口与角色；如在点击挑战的瞬间中断，需核对现场后才能安全继续。
+断点状态以本地日志为准。修改第四组参与者时保留其他组记录；继续时先核对窗口与角色，如在点击挑战的瞬间中断，需核对现场后才能安全继续。
 
 同日续跑时队长窗口出现网易账号“登录已失效，请重新登录”。任务停止于第四组账号切换，第四组仍为 0/15。账号切换期间加入该弹窗识别，避免重复点击被遮挡的按钮；需手动恢复登录后续跑。现场弹窗截图识别和普通登录画面均已验证。
 

@@ -1,7 +1,7 @@
 # This Python file uses the following encoding: utf-8
 # @author runhey
 # github https://github.com/runhey
-from time import sleep
+from time import sleep, monotonic
 from datetime import time, datetime, timedelta
 
 from tasks.Component.GeneralBattle.general_battle import GeneralBattle
@@ -14,7 +14,7 @@ from tasks.GameUi.page import page_main, page_awake_zones, page_shikigami_record
 from tasks.EvoZone.assets import EvoZoneAssets
 from tasks.EvoZone.config import EvoZone, UserStatus, KirinType
 from module.logger import logger
-from module.exception import TaskEnd
+from module.exception import TaskEnd, GameStuckError
 
 
 class ScriptTask(GeneralBattle, GeneralInvite, GeneralBuff, GeneralRoom, GameUi, EvoZoneAssets, SwitchSoul):
@@ -83,12 +83,17 @@ class ScriptTask(GeneralBattle, GeneralInvite, GeneralBuff, GeneralRoom, GameUi,
                 kirintype = self.I_WATER_KIRIN
             case KirinType.LIGHTNINGKIRIN:
                 kirintype = self.I_LIGHTNING_KIRIN
-        while True:
+        # The server can show a connecting overlay for several seconds after
+        # selecting a kirin. Avoid repeated clicks while waiting for the page.
+        deadline = monotonic() + 75
+        while monotonic() < deadline:
             self.screenshot()
             if self.appear(self.I_FORM_TEAM):
                 return True
-            if self.appear_then_click(kirintype, interval=1):
+            if self.appear_then_click(kirintype, interval=10):
                 continue
+            sleep(.3)
+        raise GameStuckError('觉醒麒麟入口等待超时')
 
     def check_layer(self, layer: str) -> bool:
         """

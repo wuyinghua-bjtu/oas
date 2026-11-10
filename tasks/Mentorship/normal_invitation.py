@@ -5,6 +5,7 @@ Both invitation identity and the joined room are checked by the caller's
 activity-specific recognizers; an ambiguous banner is never accepted.
 """
 import time
+from module.config.local_values import local_text
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from pathlib import Path
@@ -31,7 +32,7 @@ def invitation_position(frame, activity):
         avatar_match = (avatar is not None and region.shape[0] >= avatar.shape[0]
                         and region.shape[1] >= avatar.shape[1]
                         and cv2.matchTemplate(region, avatar, cv2.TM_CCOEFF_NORMED).max() >= .9)
-        if not (avatar_match or 'OASPlayer' in words) or '石距' not in words:
+        if not (avatar_match or local_text('LOCAL_SUPPORT_') in words) or '石距' not in words:
             return None
         patch = frame[235:270,120:160].astype(np.int16)
         green = (patch[:,:,1] > patch[:,:,0] + 18) & (patch[:,:,1] > patch[:,:,2] + 8)
@@ -51,7 +52,7 @@ def invitation_position(frame, activity):
                          mode='Full', method='Default', keyword='', name='mentor_normal_invite_text')
         words = ''.join(''.join(r.ocr_text.split()) for r in reader.detect_and_ocr(frame))
         label = '经验妖怪' if activity == 'experience' else '金币妖怪'
-        if 'OASPlayer' not in words or label not in words:
+        if local_text('LOCAL_SUPPORT_') not in words or label not in words:
             return None
         patch = frame[235:270,120:160].astype(np.int16)
         green = (patch[:,:,1] > patch[:,:,0] + 18) & (patch[:,:,1] > patch[:,:,2] + 8)

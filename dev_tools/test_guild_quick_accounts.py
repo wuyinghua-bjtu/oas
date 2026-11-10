@@ -1,4 +1,5 @@
 import unittest
+from module.config.local_values import local_text
 from types import SimpleNamespace
 
 from tasks.Component.SwitchAccount.switch_account_config import AccountInfo
@@ -9,7 +10,7 @@ from module.config.config_model import ConfigModel
 
 class GuildAccountSelectionTests(unittest.TestCase):
     def test_defaults_include_new_account_and_resolve(self):
-        self.assertIn('OASPlayer001', SUPPORT_CHARACTERS)
+        self.assertIn(local_text('LOCAL_SUPPORT_001'), SUPPORT_CHARACTERS)
         accounts = [AccountInfo(character=n, svr='砂狐乐园') for n in SUPPORT_CHARACTERS]
         group = GuildQuickParticipation().guild_accounts
         self.assertEqual([a.character for a in select_accounts(accounts, group.characters, group.server)],
@@ -25,7 +26,7 @@ class GuildAccountSelectionTests(unittest.TestCase):
         groups = ConfigModel().script_task('GuildQuickParticipation')
         fields = {item['name']: item for item in groups['guild_accounts']}
         self.assertEqual(fields['characters']['type'], 'multi_line')
-        self.assertIn('OASPlayer001', fields['characters']['value'])
+        self.assertIn(local_text('LOCAL_SUPPORT_001'), fields['characters']['value'])
 
 
 if __name__ == '__main__': unittest.main()

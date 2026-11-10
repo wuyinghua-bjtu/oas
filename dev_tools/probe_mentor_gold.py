@@ -1,5 +1,6 @@
 """Capture a gold invitation and leave the temporary room without fighting."""
 import os
+from module.config.local_values import local_text
 import time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
@@ -16,7 +17,7 @@ from tasks.Component.GeneralInvite.assets import GeneralInviteAssets as Invite
 mc, ac = Config('oas1'), Config('oas_leveling')
 validate_profiles(mc, ac)
 m, a = BoundDevice(mc), BoundDevice(ac)
-pair = NormalDevices(m, a, '冥界画师03')
+pair = NormalDevices(m, a, local_text('LOCAL_OCR_NAME03'))
 
 def wait(d, pred, timeout=8):
     end = time.monotonic() + timeout
@@ -53,7 +54,7 @@ try:
     m.click(420, 295, control_name='probe_gold_invite_open')
     if not wait(m, Invite.I_INVITE_ENSURE.match):
         raise RuntimeError('邀请列表未出现')
-    candidate = wait(m, lambda frame: find_guard_candidate(frame, '冥界画师03'))
+    candidate = wait(m, lambda frame: find_guard_candidate(frame, local_text('LOCAL_OCR_NAME03')))
     if not candidate:
         raise RuntimeError('未识别徒弟')
     m.click(*candidate, control_name='probe_gold_select')

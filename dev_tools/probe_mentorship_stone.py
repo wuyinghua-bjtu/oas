@@ -1,5 +1,6 @@
 """Create an invitation-only stone room, verify both players, then leave."""
 import json, subprocess, psutil, time
+from module.config.local_values import local_text
 from module.config.config import Config
 from module.atom.ocr import RuleOcr
 from tasks.TripleAwakening.device import TeamDevice
@@ -35,7 +36,7 @@ def read(im):
         x1,y1=int(max(p[0] for p in o.box)),int(max(p[1] for p in o.box))
         result.append((o.ocr_text,(x0,y0,x1-x0,y1-y0)))
     return result
-pair=NormalDevices(*ds,'OASPlayer004',read_name=read)
+pair=NormalDevices(*ds,local_text('LOCAL_SUPPORT_004'),read_name=read)
 try:
     print('STONE_PAIR',pair.invite_and_join('tako'),flush=True)
 finally:

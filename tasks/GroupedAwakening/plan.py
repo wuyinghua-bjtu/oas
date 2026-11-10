@@ -1,19 +1,20 @@
 """Resolve the guild accounts into stable, ordered awakening teams."""
+from module.config.local_values import local_text
 
 GROUPS = (
-    ('OASPlayer003', 'OASPlayer002', 'OASPlayer001'),
-    ('OASPlayer004', 'OASPlayer005', 'OASPlayer006'),
-    ('OASPlayer007', 'OASPlayer008', 'OASPlayer009'),
-    ('OASPlayer010', 'OASPlayer011', 'OASMain2'),
+    (local_text('LOCAL_SUPPORT_003'), local_text('LOCAL_SUPPORT_002'), local_text('LOCAL_SUPPORT_001')),
+    (local_text('LOCAL_SUPPORT_004'), local_text('LOCAL_SUPPORT_005'), local_text('LOCAL_SUPPORT_006')),
+    (local_text('LOCAL_SUPPORT_007'), local_text('LOCAL_SUPPORT_008'), local_text('LOCAL_SUPPORT_009')),
+    (local_text('LOCAL_SUPPORT_010'), local_text('LOCAL_SUPPORT_011'), local_text('LOCAL_PARTNER2')),
 )
 
 
 def resolve_accounts(configured, characters, server):
     names = [v.strip() for v in characters.replace('，', ',').replace(',', '\n').splitlines() if v.strip()]
     required = [name for group in GROUPS for name in group]
-    # OASMain2 participates in the fourth awakening group; the separate guild
+    # The configured partner participates in the fourth awakening group; the separate guild
     # activity can retain its existing eleven-character selection.
-    expected_guild = set(required) - {'OASMain2'}
+    expected_guild = set(required) - {local_text('LOCAL_PARTNER2')}
     if len(names) != len(set(names)) or set(names) not in (expected_guild, set(required)):
         raise ValueError('寮任务名单与分组觉醒的原有角色不一致，请先核对名单')
     resolved = {}

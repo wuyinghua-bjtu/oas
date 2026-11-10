@@ -28,6 +28,7 @@ class WQExplore(BaseExploration, HighLight):
         explore_only_boss: bool = True
         _cnt_exploration = 0
         search_fail_cnt = 0
+        empty_sweeps = 0
         search_fail_timer = Timer(3.2)  # 这里设置的时间一定要大于S_SWIPE_BACKGROUND_RIGHT滑动的时间
         # https://github.com/runhey/OnmyojiAutoScript/pull/1697 云景阆苑 皮肤
         from tasks.Component.Costume.config import MainType
@@ -54,6 +55,8 @@ class WQExplore(BaseExploration, HighLight):
                     if explore_only_boss:
                         raise ExploreWantedBoss
                     break
+                if hasattr(self, 'support_account'):
+                    self.device.save_screenshot(genre='findjade_explore_entrance', interval=0)
                 self.ui_click(self.I_E_EXPLORATION_CLICK, stop=self.I_E_SETTINGS_BUTTON)
                 continue
             # 探索大世界
@@ -80,33 +83,30 @@ class WQExplore(BaseExploration, HighLight):
                 #             count += 1
                 #     explore_init = True
                 #     continue
+                if hasattr(self, 'support_account') and not explore_init:
+                    self.device.save_screenshot(genre='findjade_explore_map', interval=0)
+                    explore_init = True
                 # 小纸人
                 if self.appear(self.I_BATTLE_REWARD):
                     if self.ui_get_reward(self.I_BATTLE_REWARD):
                         continue
-                # boss
-                if self.appear(self.I_BOSS_BATTLE_BUTTON):
-                    if self.fire(self.I_BOSS_BATTLE_BUTTON):
-                        logger.info(f'Boss battle, minions cnt {self.minions_cnt}')
-                        _cnt_exploration += 1
-                        explore_only_boss = False
-                    continue
-                # 小怪
+                # Only the bounty highlight authorizes a fight. A generic
+                # boss/sword icon proves challengeability, not target identity.
                 if self.appear(self.TEMPLATE_GIF) and self.fire(self.TEMPLATE_GIF):
                     explore_only_boss = False
-                    logger.info(f'Fight, minions cnt {self.minions_cnt}')
-                    continue
-                # Current exploration maps show a crossed-swords marker above
-                # challengeable enemies even when the old highlight animation
-                # cannot be matched. Recheck quest progress after each run.
-                if self.appear(self.I_WQ_EXPLORE_SWORDS) and self.fire(self.I_WQ_EXPLORE_SWORDS):
-                    explore_only_boss = False
-                    logger.info(f'Fight using exploration sword marker, minions cnt {self.minions_cnt}')
+                    empty_sweeps = 0
+                    logger.info(f'Fight highlighted bounty target, minions cnt {self.minions_cnt}')
                     continue
                 # 向后拉,寻找怪
                 if search_fail_timer.reached():
                     search_fail_timer.reset()
                     if self._match_end.stable(self.device.image, refresh_after_stable=True):
+                        empty_sweeps += 1
+                        logger.warning('未识别到悬赏高亮目标，退出重打进图，连续第 %s 次', empty_sweeps)
+                        self.device.save_screenshot(genre='findjade_highlight_missing', interval=0)
+                        if empty_sweeps >= 3:
+                            self.quit_explore()
+                            raise ExploreWantedBoss
                         _cnt_exploration += 1
                         self.quit_explore()
                         continue

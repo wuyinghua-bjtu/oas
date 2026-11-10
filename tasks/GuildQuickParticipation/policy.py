@@ -1,11 +1,12 @@
 """Account selection and weekday policy for the independent guild task."""
 from datetime import datetime, time, timedelta
+from module.config.local_values import local_text
 
 
 SUPPORT_CHARACTERS = (
-    'OASPlayer011', 'OASPlayer010', 'OASPlayer009', 'OASPlayer008',
-    'OASPlayer007', 'OASPlayer002', 'OASPlayer006', 'OASPlayer005',
-    'OASPlayer004', 'OASPlayer003', 'OASPlayer001',
+    local_text('LOCAL_SUPPORT_011'), local_text('LOCAL_SUPPORT_010'), local_text('LOCAL_SUPPORT_009'), local_text('LOCAL_SUPPORT_008'),
+    local_text('LOCAL_SUPPORT_007'), local_text('LOCAL_SUPPORT_002'), local_text('LOCAL_SUPPORT_006'), local_text('LOCAL_SUPPORT_005'),
+    local_text('LOCAL_SUPPORT_004'), local_text('LOCAL_SUPPORT_003'), local_text('LOCAL_SUPPORT_001'),
 )
 SERVER = '砂狐乐园'
 

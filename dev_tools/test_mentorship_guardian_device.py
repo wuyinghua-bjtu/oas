@@ -1,4 +1,5 @@
 import unittest
+from module.config.local_values import local_text
 from pathlib import Path
 import cv2
 import numpy as np
@@ -14,7 +15,7 @@ class Device:
 
 class GuardianDeviceTests(unittest.TestCase):
     def image(self, name):
-        p = Path(r'C:\Users\OASUser\AppData\Local\Temp') / name
+        p = Path(r'C:\Users\wyh\AppData\Local\Temp') / name
         return cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2RGB)
 
     def test_entry_and_player_page_are_distinct(self):
@@ -23,7 +24,7 @@ class GuardianDeviceTests(unittest.TestCase):
         empty = self.image('codex-clipboard-cf300e95-0f14-4b6e-8b76-bea3fd21fec2.png')
         self.assertIsNotNone(detect(master, 'guard_challenge'))
         self.assertIsNone(detect(apprentice, 'guard_challenge'))
-        pair = GuardianDevices(Device(master), Device(apprentice), '冥界画师03')
+        pair = GuardianDevices(Device(master), Device(apprentice), local_text('LOCAL_OCR_NAME03'))
         self.assertTrue(pair._both_confirmed(master, apprentice))
         self.assertFalse(pair._both_confirmed(master, empty))
 
@@ -36,7 +37,7 @@ class GuardianDeviceTests(unittest.TestCase):
     def test_unknown_initial_screen_does_not_click(self):
         unknown = np.zeros((720, 1280, 3), np.uint8)
         mentor, pupil = Device(unknown), Device(unknown)
-        self.assertFalse(GuardianDevices(mentor, pupil, '冥界画师03').invite_and_lock())
+        self.assertFalse(GuardianDevices(mentor, pupil, local_text('LOCAL_OCR_NAME03')).invite_and_lock())
         self.assertEqual(mentor.clicks + pupil.clicks, [])
 
 

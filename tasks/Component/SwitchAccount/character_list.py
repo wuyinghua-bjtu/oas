@@ -1,4 +1,4 @@
-"""Narrow OCR correction for the known 砂狐乐园 冥界画师 account cards."""
+"""Narrow OCR correction for the configured account cards."""
 from module.atom.ocr import RuleOcr
 from module.logger import logger
 

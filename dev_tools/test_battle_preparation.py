@@ -21,6 +21,16 @@ class BattlePreparationTests(unittest.TestCase):
         battle.appear_then_click.assert_called_once_with(
             battle.I_CONFIRM_CLOSE_DIFF_SOUL, interval=0.8)
 
+    def test_wanted_non_secret_battle_uses_common_auto_mode_controller(self):
+        from tasks.WantedQuests.script_task import ScriptTask as WantedTask
+        task = object.__new__(WantedTask)
+        task._wanted_secret_battle = False
+        with patch.object(GeneralBattle, 'battle_wait', return_value=True) as common, \
+                patch('tasks.Secret.script_task.ScriptTask.battle_wait',
+                      side_effect=AssertionError('Wrong secret battle controller')):
+            self.assertTrue(task.battle_wait(False))
+        common.assert_called_once_with(task, False)
+
     def test_failed_preparation_never_enters_battle_wait(self):
         battle = self.battle()
         battle.battle_before = Mock(return_value=False)

@@ -1,5 +1,6 @@
 """只识别已记录的师徒页面，不把未知画面当作成功。"""
 from pathlib import Path
+from module.config.local_values import local_text
 import cv2
 import numpy as np
 
@@ -43,7 +44,7 @@ def guard_accept_position(rgb_image):
         reader = RuleOcr(roi=(190,210,260,95), area=(190,210,260,95),
                          mode='Full', method='Default', keyword='', name='mentor_guard_invite_text')
         words = ''.join(''.join(r.ocr_text.split()) for r in reader.detect_and_ocr(rgb_image))
-        if 'OASPlayer' not in words or '守护历练' not in words:
+        if local_text('LOCAL_SUPPORT_') not in words or '守护历练' not in words:
             return None
         patch = rgb_image[235:270, 120:160].astype(np.int16)
         green = (patch[:, :, 1] > patch[:, :, 0] + 18) & (patch[:, :, 1] > patch[:, :, 2] + 8)

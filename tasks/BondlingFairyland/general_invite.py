@@ -2,6 +2,7 @@
 # @author runhey
 # github https://github.com/runhey
 from time import sleep
+from module.config.local_values import local_text
 import numpy as np
 
 from enum import Enum
@@ -35,7 +36,7 @@ def wind_rain_btwd_candidate(columns):
     """Return one exact name paired with its nearby server, or fail closed."""
     matches = []
     for roi, rows in columns:
-        names = [r for r in rows if ''.join(r.ocr_text.split()).upper() == 'OASMain']
+        names = [r for r in rows if ''.join(r.ocr_text.split()).upper() == local_text('LOCAL_PARTNER')]
         servers = [r for r in rows if '网易' in r.ocr_text and '风雨同行' in r.ocr_text]
         for name in names:
             nx, ny = name.box.mean(axis=0)
@@ -329,22 +330,22 @@ class GeneralInvite(BaseTask, BondlingFairylandAssets, GeneralInviteAssets):
         if not name:
             return False
 
-        if self.config.config_name == 'oas1' and name.strip().upper() == 'OASMain':
+        if self.config.config_name == 'oas1' and name.strip().upper() == local_text('LOCAL_PARTNER'):
             self.screenshot()
             rules = (self.O_FRIEND_NAME_1, self.O_FRIEND_NAME_2)
             columns = [(rule.roi, rule.detect_and_ocr(self.device.image)) for rule in rules]
             point = wind_rain_btwd_candidate(columns)
             if point is None:
-                logger.warning('Cannot uniquely confirm OASMain on 网易-风雨同行; no invitation selected')
+                logger.warning('Cannot uniquely confirm configured partner on the target server; no invitation selected')
                 return False
             self.device.click(*point, control_name='invite_btwd_wind_rain')
             for _ in range(4):
                 sleep(0.3)
                 self.screenshot()
                 if self.appear(self.I_SELECTED):
-                    logger.info('Selected OASMain on 网易-风雨同行')
+                    logger.info('Selected configured partner on the target server')
                     return True
-            raise GameStuckError('OASMain selection not confirmed; do not send invitation')
+            raise GameStuckError('Configured partner selection not confirmed; do not send invitation')
 
         self.screenshot()
         self.O_FRIEND_NAME_1.keyword = name

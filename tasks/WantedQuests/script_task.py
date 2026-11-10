@@ -15,6 +15,7 @@ from module.base.timer import Timer
 from module.exception import TaskEnd, GameStuckError
 from module.logger import logger
 from tasks.Component.Costume.config import MainType
+from tasks.Component.GeneralBattle.general_battle import GeneralBattle
 from tasks.Component.GeneralBattle.config_general_battle import GeneralBattleConfig
 from tasks.GameUi.page import page_main, page_exploration, page_shikigami_records
 from tasks.Secret.script_task import ScriptTask as SecretScriptTask
@@ -555,7 +556,10 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
 
     def battle_wait(self, random_click_swipt_enable):
         if not getattr(self, '_wanted_secret_battle', False):
-            return super().battle_wait(random_click_swipt_enable)
+            # MRO includes SecretScriptTask, whose battle_wait omits auto-mode
+            # checks. Exploration/challenge/soul battles must use the common
+            # controller explicitly, not the secret-zone implementation.
+            return GeneralBattle.battle_wait(self, random_click_swipt_enable)
         self.device.stuck_record_add('BATTLE_STATUS_S')
         self.device.click_record_clear()
         logger.info('Start bounty secret battle process')
@@ -1043,6 +1047,7 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
         if not self.ui_page_appear(page_exploration):
             raise GameStuckError('无法确认探索地图，不能根据空侧栏判断悬赏完成')
         logger.info('No bounty labels or bounty rewards found in three sidebar frames')
+        self.device.save_screenshot(genre='findjade_no_bounty_sidebar', interval=0)
         return False
 
 

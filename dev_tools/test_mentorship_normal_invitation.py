@@ -1,4 +1,5 @@
 import os
+from module.config.local_values import local_text
 import unittest
 import cv2
 import numpy as np
@@ -18,9 +19,9 @@ class NormalInvitationTests(unittest.TestCase):
         self.assertIsNotNone(experience_invitation_position(invitation))
         mentor = image('mentorship-room-mentor.png')
         apprentice = image('mentorship-room-apprentice.png')
-        self.assertTrue(normal_rooms_have_pair(mentor, apprentice, '冥界画师03'))
+        self.assertTrue(normal_rooms_have_pair(mentor, apprentice, local_text('LOCAL_OCR_NAME03')))
         self.assertFalse(normal_rooms_have_pair(mentor, apprentice, '其他名字'))
-        self.assertFalse(normal_rooms_have_pair(mentor, np.zeros_like(apprentice), '冥界画师03'))
+        self.assertFalse(normal_rooms_have_pair(mentor, np.zeros_like(apprentice), local_text('LOCAL_OCR_NAME03')))
 
 
 if __name__ == '__main__':

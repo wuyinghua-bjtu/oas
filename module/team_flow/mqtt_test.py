@@ -2,16 +2,17 @@
 # @author runhey
 # github https://github.com/runhey
 from time import sleep
+from module.config.local_values import local_text
 from random import randint
 from paho.mqtt import client as mqtt_client
 
-broker = 'mqtt.example.invalid'
+broker = local_text('LOCAL_MQTT_BROKER')
 port = 8883
 topic = 'python/mqtt'
 client_id = f'python-mqtt-{randint(0, 1000)}'
 # 如果 broker 需要鉴权，设置用户名密码
-username = 'PUBLIC_CONFIG_REQUIRED'
-password = 'PUBLIC_CONFIG_REQUIRED'
+username = local_text('LOCAL_MQTT_USERNAME')
+password = local_text('LOCAL_MQTT_PASSWORD')
 
 def connect_mqtt():
     def on_connect(client, userdata, flags, rc):

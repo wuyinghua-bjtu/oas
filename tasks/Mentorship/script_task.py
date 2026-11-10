@@ -1,4 +1,5 @@
 """Daily two-device mentorship task for OAS1."""
+from module.config.local_values import local_text
 import json
 import subprocess
 import time
@@ -82,7 +83,7 @@ class ScriptTask(BaseTask):
                 raise RuntimeError(f'{apprentice_server} 的 {apprentice_name} 必须在小号列表中有唯一有效的安卓账号')
             for device in devices:
                 clear_verified_statistics(device, apprentice_name)
-            for index, expected in enumerate(('OASPlayer', apprentice_name)):
+            for index, expected in enumerate((local_text('LOCAL_SUPPORT_'), apprentice_name)):
                 player = Participant(configs[index], devices[index])
                 player.step('师徒角色核对', 120)
                 devices[index].stuck_record_clear()

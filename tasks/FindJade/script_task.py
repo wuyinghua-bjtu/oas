@@ -8,6 +8,7 @@ from tasks.Component.SwitchAccount.switch_account import SwitchAccount
 from tasks.FindJade import WantedQuestsEx
 from tasks.FindJade import black_gold
 from tasks.FindJade import board_scan
+from tasks.FindJade import assist
 from tasks.FindJade.assets import FindJadeAssets
 from tasks.FindJade.config import AccountInfo, FindJade
 from tasks.FindJade.report import CooperationReport
@@ -32,6 +33,8 @@ class ScriptTask(GameUi, FindJadeAssets):
         # take effect on the next scheduled run without restarting the worker.
         importlib.reload(black_gold)
         importlib.reload(board_scan)
+        importlib.reload(WantedQuestsEx)
+        importlib.reload(assist)
         self.fade_conf = self.config.find_jade
         self.cooperation_report = CooperationReport(self.config.config_name)
         self.report_status = '异常结束（仅包含已识别结果）'
@@ -363,7 +366,10 @@ class ScriptTask(GameUi, FindJadeAssets):
             "is_wq_remained": WantedQuestsEx.is_wq_remained,
             "read_wq_remained": module.ScriptTask.is_wq_remained,
             "sender_routes": WantedQuestsEx.sender_routes,
+            "sender_tracker_visible": WantedQuestsEx.sender_tracker_visible,
+            "sender_challenge_tickets": WantedQuestsEx.sender_challenge_tickets,
             "execute_mission": WantedQuestsEx.execute_mission,
+            "battle_before": assist.sender_battle_before,
             "fire": WantedQuestsEx.sender_fire,
             "sender_soul": WantedQuestsEx.sender_soul,
             "close_sender_soul_bonus": WantedQuestsEx.close_sender_soul_bonus,

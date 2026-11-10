@@ -1,11 +1,12 @@
 """Verified friend actions, limited to the named main account."""
+from module.config.local_values import local_text
 from time import monotonic
 from module.atom.image import RuleImage
 from module.atom.ocr import RuleOcr
 from module.exception import GameStuckError
 from tasks.GameUi.page import page_friends
 
-TARGET='OASPlayer'
+TARGET=local_text('LOCAL_SUPPORT_')
 ROOT='./tasks/GuildQuickParticipation/res/'
 
 

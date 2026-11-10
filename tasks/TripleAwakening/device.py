@@ -37,10 +37,9 @@ class TeamDevice(Device):
         rect = win32gui.GetClientRect(render)
         if tuple(rect) != (0, 0, 1280, 720):
             width, height = rect[2], rect[3]
-            # MuMu can shrink an otherwise identical 16:9 render by a few
-            # pixels during a window transition. Restore only this small,
-            # known deviation after verifying the window and process above.
-            if (1216 <= width <= 1280 and 684 <= height <= 720
+            # MuMu may shrink an otherwise identical 16:9 render during
+            # a transition. Restore it after verifying the window and process.
+            if (640 <= width <= 1280 and 360 <= height <= 720
                     and abs(width / height - 16 / 9) < .015
                     and not win32gui.IsIconic(root)):
                 left, top, right, bottom = win32gui.GetWindowRect(root)

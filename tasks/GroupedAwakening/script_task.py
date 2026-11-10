@@ -21,6 +21,9 @@ from tasks.Component.SwitchAccount.switch_account import SwitchAccount
 from tasks.EvoZone.config import KirinType, Layer
 from tasks.FindJade.script_task import ScriptTask as FindJadeTask
 from tasks.GuildQuickParticipation.policy import SUPPORT_CHARACTERS, SERVER
+import importlib
+import tasks.TripleAwakening.script_task as _triple_module
+importlib.reload(_triple_module)
 from tasks.TripleAwakening.script_task import (ScriptTask as TeamTask, Participant,
                                                  TeamBattleFailed, WINDOWS, MANAGER)
 from tasks.TripleAwakening.device import TeamDevice
@@ -218,7 +221,11 @@ class ScriptTask(TeamTask):
                 old = json.loads(previous_path.read_text(encoding='utf-8'))
                 # A previous day's ledger is historical evidence, not today's
                 # battle state. Guild work may have switched every character.
-                if resumable_today(old, today):
+                if (resumable_today(old, today) or
+                        (old.get('date') != today and old.get('updated_at', '').startswith(today)
+                         and old.get('status') not in ('完成', '完成（有失败）'))):
+                    # Continue an active run that actually crossed midnight;
+                    # older untouched ledgers remain historical.
                     path = previous_path
         record = (json.loads(path.read_text(encoding='utf-8')) if path.exists() else {
             'date': today, 'status': '运行中', 'dungeon': '火麒麟十层',
@@ -289,7 +296,11 @@ class ScriptTask(TeamTask):
                 device_settings.serial = f"{info['adb_host_ip']}:{info['adb_port']}"
                 args = psutil.Process(info['pid']).cmdline()
                 device_settings.emulatorinfo_name = args[args.index('--vm') + 1]
-                device_settings.screenshot_method = 'window_background'
+                # window_background returns pure black frames when the emulator
+                # window is hidden/occluded, which silently kills every OCR read
+                # (nickname, invitations). ADB capture does not depend on the
+                # window being on screen.
+                device_settings.screenshot_method = 'ADB'
                 device_settings.control_method = 'window_message'
                 device_settings.adb_restart = False
                 device_settings.emulator_window_minimize = False
@@ -325,12 +336,51 @@ class ScriptTask(TeamTask):
                         guild = json.loads(guild_path.read_text(encoding='utf-8'))
                         if guild_changed_after_record(guild, resume_updated_at):
                             raise GameStuckError('战斗中断后寮活切换过账号，保留现场并要求核实，禁止按旧绑定恢复')
-                # Prepare the extra windows first. They can still hold the
-                # account most recently used by the primary guild worker.
-                # Switching the primary window first can evict that stale
-                # session before its account has been changed.
-                indexes = range(len(group)) if resumed_battle else reversed(range(len(group)))
+                # Victory screens do not show account names. Finish only the
+                # recorded settlement first, then verify every account before
+                # crediting the round or issuing a new invitation.
+                pending = entry.get('pending_round', {})
+                expected_windows = list(WINDOWS[:len(group)])
+                if (resumed_battle and pending.get('round') == entry.get('active_round')
+                        and entry.get('battle_phase') == 'fighting'
+                        and set(pending.get('won', {})) == set(expected_windows)
+                        and all(pending['won'][w] is True for w in expected_windows)):
+                    for idx, participant in enumerate(active):
+                        proc = psutil.Process(team_infos[idx]['pid'])
+                        binding = {'pid': proc.pid, 'started': proc.create_time(),
+                                   'window': WINDOWS[idx], 'character': group[idx]}
+                        if entry.get('bindings', {}).get(WINDOWS[idx]) != binding:
+                            raise GameStuckError('结算恢复时窗口绑定变化：' + group[idx])
+                        participant.expected_name = group[idx]
+                        participant.step('恢复结算', 300)
+                    entry['recovery_identity_required'] = True
+                    save()
+                    battle_players = [active[2], active[0], active[1]] if group_index == 3 else active
+                    self.battle(battle_players, True, entry, save)
+                    for idx, participant in enumerate(active):
+                        participant.step('结算后核实角色', 180)
+                        if participant.nickname() != group[idx]:
+                            raise GameStuckError('结算后角色不符：' + group[idx])
+                    entry.pop('recovery_identity_required', None)
+                    if not finalize_settled_round(entry, expected_windows, datetime.now().isoformat(timespec='seconds')):
+                        raise GameStuckError('结算证据不完整，禁止计数')
+                    save()
+                    logger.info('结算后已核实全队身份，恢复第%s组第%s场', group_index + 1, entry['completed'])
+                    resumed_battle = False
+                    if entry['completed'] >= 15:
+                        continue
+                # Assign the primary window first. It normally still holds the
+                # account that the preceding guild work left logged in, and a
+                # later window of this same group may be assigned that exact
+                # character. Switching a secondary window to it while the
+                # primary is still online makes two emulators log into one
+                # account: NetEase kicks both, the "logged in on another
+                # device" dialog loops, the nickname can never be read and the
+                # group dies before the primary ever gets its own character.
+                indexes = range(len(group))
                 for index in indexes:
+                    logger.info('第%s组切号顺序 %s <- %s', group_index + 1,
+                                WINDOWS[index], group[index])
                     name = group[index]
                     participant = active[index]
                     participant.expected_name = name
@@ -412,12 +462,24 @@ class ScriptTask(TeamTask):
                             LoginHandler(config=participant.config, device=participant.device)._app_handle_login()
                         participant.step(stage, 300)
                         current = participant.nickname()
+                    except GameStuckError:
+                        # The window may still sit on the login/account page where
+                        # no nickname is rendered at all. That is not a reason to
+                        # abort the whole group: go straight to the assigned
+                        # account, the switch itself re-verifies the identity.
+                        logger.warning('%s 读不到当前角色名，直接切到目标号 %s', WINDOWS[index], name)
+                        current = None
                     if current != name:
                         if not FindJadeTask.switch_support_account(participant, accounts[name]):
                             raise GameStuckError('切号失败：' + name)
                         participant.step(stage + '后核对角色', 90)
-                        if participant.nickname() != name:
-                            raise GameStuckError('切号后角色不符：' + name)
+                        try:
+                            if participant.nickname() != name:
+                                raise GameStuckError('切号后角色不符：' + name)
+                        except GameStuckError as e:
+                            if '切号后角色不符' in str(e):
+                                raise
+                            raise GameStuckError('切号后无法核实角色：' + name)
                     entry.setdefault('verified', {})[WINDOWS[index]] = name
                     pid = psutil.Process(team_infos[index]['pid'])
                     entry.setdefault('bindings', {})[WINDOWS[index]] = {
@@ -453,7 +515,7 @@ class ScriptTask(TeamTask):
                                 raise GameStuckError('组队前角色不符：' + name)
                         if not retry_verification:
                             break
-                # Keep physical bindings intact and use OASMain2 as captain.
+                # Keep physical bindings intact and use the final participant as captain.
                 if group_index == 3:
                     active = [active[2], active[0], active[1]]
                 leader = active[0]

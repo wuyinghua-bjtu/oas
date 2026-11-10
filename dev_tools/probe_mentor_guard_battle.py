@@ -1,5 +1,6 @@
 """Run one authorized guardian round from the verified activity screen."""
 from module.config.config import Config
+from module.config.local_values import local_text
 from tasks.Mentorship.device import BoundDevice, validate_profiles
 from tasks.Mentorship.guard_remaining import read_remaining
 from tasks.Mentorship.guardian_device import GuardianDevices
@@ -12,7 +13,7 @@ remaining = read_remaining(m)
 print('GUARD_REMAINING', remaining, flush=True)
 if remaining is None or remaining <= 0:
     raise RuntimeError('守护历练剩余次数未确认')
-pair = GuardianDevices(m, a, '冥界画师03')
+pair = GuardianDevices(m, a, local_text('LOCAL_OCR_NAME03'))
 if not pair.invite_and_lock():
     raise RuntimeError('守护历练邀请或双端阵容锁定失败')
 print('PAIR_LOCKED', flush=True)

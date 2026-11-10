@@ -1,4 +1,5 @@
 """FindJade's October 2026 quest-board skin adapter; never mutates shared assets."""
+from module.config.local_values import local_text
 from time import monotonic
 import re
 
@@ -114,7 +115,7 @@ class SupportCharacterList(RuleOcr):
         suffix=re.search(r'\d+$',self.expected)
         for row in rows:
             text=row.ocr_text.lstrip('1234567890 ([<>])【】（）《》').replace(' ','')
-            missing_first = (self.expected.startswith('冥界画师') and
+            missing_first = (self.expected.startswith(local_text('LOCAL_OCR_NAME')) and
                              text == self.expected[1:])
             if (len(text)!=len(self.expected) and not missing_first) or len(text)<4:
                 continue
@@ -241,7 +242,7 @@ def read_cooperation_info(self,inspect_realworld=False):
                     already_shared=True
                     completed=True
                     button=None
-                elif '自己击败' in identity and '好友击败' in identity and 'OASPlayer' in claimtext:
+                elif '自己击败' in identity and '好友击败' in identity and local_text('LOCAL_SUPPORT_') in claimtext:
                     already_shared=True
                     button=SHARED[n]
                 else:

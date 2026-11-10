@@ -8,9 +8,9 @@
 3. 账号别名(accountAlias) OCR识别正确率低的产物,多个别名使用#分隔
    建议根据日志显示配置
    例子: 
-   - 账号:example@example.invalid
-   - 识别结果 example@example.invalid
-      或者 example@example.invalid 等等千奇百怪的结果
+   - 账号:abc0123@163.com
+   - 识别结果 a6co123@163.com
+      或者 abc023@163.com 等等千奇百怪的结果
    - 别名配置为 a6co123#abc023#.....
 4. appleOrAndroid: true为安卓,false为苹果
 5. last_complete_time: 上次完成时间,第一次配置时可以填写为(1970-01-01 00:00:00),后期无需手动修改
@@ -29,7 +29,7 @@
  {
    "character": "角色名2",
    "svr": "森遥乡",
-   "account": "example@example.invalid",
+   "account": "emailAddress@163.com",
    "accountAlias": "emailAddress0#emailAddressO#emailAddresso",
    "appleOrAndroid": true,
    "last_complete_time": "2023-04-06 19:33:01.159141"

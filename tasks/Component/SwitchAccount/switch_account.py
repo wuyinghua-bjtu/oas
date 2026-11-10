@@ -1,4 +1,5 @@
 from adbutils import device
+from module.config.local_values import local_text
 
 from module.config.config import Config
 from module.device.device import Device
@@ -39,7 +40,7 @@ class SwitchAccount(LoginAccount, ExitGame, GameUi, SwitchAccountAssets):
         super().__init__(config, device)
         self.to_account_info = to
         self.from_account_info = frm
-        if to.svr == '砂狐乐园' and to.character.startswith('冥界画师'):
+        if to.svr == '砂狐乐园' and to.character.startswith(local_text('LOCAL_OCR_NAME')):
             from tasks.Component.SwitchAccount.character_list import MingCharacterList
             self.O_SA_SELECT_SVR_CHARACTER_LIST=MingCharacterList(to.character)
 
@@ -100,7 +101,7 @@ class SwitchAccount(LoginAccount, ExitGame, GameUi, SwitchAccountAssets):
         # The courtyard font can read 冥 as 买. Require the exact remaining
         # nickname and a separately matched observed 冥 glyph in two frames.
         expected=self.verification_name(self.to_account_info.character)
-        if expected.startswith('冥界画师') and observed == '买'+expected[1:]:
+        if expected.startswith(local_text('LOCAL_OCR_NAME')) and observed == '买'+expected[1:]:
             from module.atom.image import RuleImage
             glyph=RuleImage(roi_front=(130,33,21,22),roi_back=(125,28,31,32),
                             method='Template matching',threshold=.90,
@@ -120,6 +121,6 @@ class SwitchAccount(LoginAccount, ExitGame, GameUi, SwitchAccountAssets):
 if __name__ == '__main__':
     config = Config('oas1')
     device=Device()
-    toAccount=AccountInfo(account="example@example.invalid", account_alias="emailO#emailo", apple_or_android=True, character="粘贴", svr="立秋夕烛")
+    toAccount=AccountInfo(account=local_text('LOCAL_EXAMPLE_ACCOUNT'), account_alias="emailO#emailo", apple_or_android=True, character="粘贴", svr="立秋夕烛")
     sa=SwitchAccount(config,device,toAccount)
     sa.switchAccount()

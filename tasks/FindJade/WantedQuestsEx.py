@@ -207,13 +207,56 @@ def is_wq_remained(self):
     return self.read_wq_remained()
 
 
+def sender_challenge_tickets(self):
+    text = ''.join((self.O_WQ_NUMBER.ocr(self.device.image) or '').split())
+    match = re.search(r'\d+', text)
+    return int(match.group()) if match else 0
+
+
+def sender_tracker_visible(self):
+    # The tracked-bounty list only renders inside a chapter map, so a missing
+    # sidebar must not be read as "no quest left".
+    self.screenshot()
+    if self.appear(self.I_WQ_BOX) or self.appear(self.I_TREASURE_BOX_CLICK):
+        return True
+    for result in self.O_WQ_TEXT_ALL.detect_and_ocr(self.device.image):
+        text = ''.join(result.ocr_text.split())
+        if re.fullmatch(r'\d+/\d+', text) or re.fullmatch(r'\d{4}', text):
+            return True
+    return False
+
+
 def finish_sender_cooperation(self):
     self.ui_click_until_disappear(self.I_UI_BACK_RED)
     self.enter_sender_exploration()
     self.unwanted_boss_name_list = []
     self.want_strategy_excluding = []
-    if not self.complete_traced_quests(strict=True):
-        raise GameStuckError('Sender cooperation quests are still unfinished')
+    for attempt in range(6):
+        if self.sender_tracker_visible():
+            if not self.complete_traced_quests(strict=True):
+                raise GameStuckError('Sender cooperation quests are still unfinished')
+            return
+        logger.info('悬赏追踪列表不在当前页面，改用悬赏板复核进度')
+        if not self.open_cooperation_board():
+            raise GameStuckError('Cannot reopen quest board to verify sender cooperation')
+        items = self.read_cooperation_info()
+        outstanding = [item for item in items if item.get('already_shared')
+                       and not item.get('completed')
+                       and item['type'] != CooperationType.RealWorld]
+        if not outstanding:
+            logger.info('悬赏板确认小号协作已无未完成项，结束等待')
+            self.ui_click_until_disappear(self.I_UI_BACK_RED)
+            return
+        routes = self.sender_routes(self.device.image, self.sender_challenge_tickets())
+        if not routes:
+            raise GameStuckError('No available sender route to finish cooperation')
+        _, destination, per_battle, button, kind = routes[0]
+        batch = 1 if kind in ('秘闻', '探索') else min(per_battle, 6)
+        logger.info('FindJade board-driven follow-up: %s %s x%s', kind, destination, batch)
+        {'挑战': self.challenge, '探索': self.explore, '秘闻': self.secret,
+         '御魂': self.sender_soul}[kind](button, batch)
+        self.enter_sender_exploration()
+    raise GameStuckError('Cannot confirm sender cooperation after board-driven retries')
 
 
 def find_wq(self, image, strict_progress=False):
@@ -273,11 +316,15 @@ def sender_routes(self, image, challenge_tickets):
             logger.info('FindJade skipped route %s: Go button unavailable', number)
             continue
         kind = ''.join(getattr(self,f'O_WQ_TYPE_{number}').ocr(image).split())
-        if kind.startswith('式神'):
+        # A shikigami-fragment dungeon completes the bounty in one deterministic
+        # run and does not spend challenge tickets, so it always outranks the
+        # configured group order. Keep the challenge executor for entry.
+        fragment = kind.startswith('式神')
+        if fragment:
             kind = '挑战'
         if kind not in ('挑战','探索','秘闻','御魂') or kind not in priority:
             continue
-        if kind == '挑战' and challenge_tickets <= 0:
+        if kind == '挑战' and not fragment and challenge_tickets <= 0:
             continue
         text = getattr(self,f'O_WQ_INFO_{number}').ocr(image)
         match = re.fullmatch(r'(.+?)[(（]数量[:：]\s*(\d+)[)）]?', text.strip())
@@ -286,10 +333,27 @@ def sender_routes(self, image, challenge_tickets):
         destination = match.group(1)
         if kind == '秘闻' and any(destination.endswith(layer) for layer in excluded_layers):
             continue
-        route = (priority.index(kind), destination, int(match.group(2)),button,kind)
+        order = -1 if fragment else priority.index(kind)
+        route = (order, destination, int(match.group(2)),button,kind)
         if (kind,destination) not in self.sender_excluded_routes:
             routes.append(route)
-    return sorted(routes,key=lambda route:route[0])
+            if fragment:
+                logger.info('FindJade fragment dungeon takes first priority: %s', destination)
+    def route_key(route):
+        _, destination, _, _, kind = route
+        chapter = 999
+        if kind == '探索':
+            match = re.fullmatch(r'第([一二三四五六七八九十]+)章', destination)
+            if match:
+                text = match.group(1)
+                digits = dict(zip('一二三四五六七八九', range(1,10)))
+                if '十' in text:
+                    left, right = text.split('十')
+                    chapter = (digits.get(left, 1) * 10 + digits.get(right, 0))
+                else:
+                    chapter = digits.get(text, 999)
+        return (route[0], chapter)
+    return sorted(routes, key=route_key)
 
 
 def execute_mission(self, ocr, num_want, num_challenge):
@@ -371,12 +435,36 @@ def sender_soul(self, goto, count):
 
 def sender_fire(self, button):
     """Never continue an exploration after an unambiguous battle loss."""
-    self.ui_click_until_disappear(button, interval=3)
+    # Do not spend a throttled click-until-disappear loop on the enemy
+    # marker: the preparation countdown may expire before assist inspection.
     self.screenshot()
-    if (self.appear(self.I_E_SETTINGS_BUTTON) or self.appear(self.I_E_AUTO_ROTATE_ON)
-            or self.appear(self.I_E_AUTO_ROTATE_OFF)):
-        logger.warning('Fire button disappeared but exploration is still visible')
+    if not self.appear(button):
         return False
+    from tasks.FindJade.assist import prepare_exploration_assist_entry
+    prepare_exploration_assist_entry(self)
+    # The OCR above does not move the map; rematch the enemy before clicking.
+    if not self.appear(button):
+        return False
+    self.device.save_screenshot(genre='findjade_before_enemy', interval=0)
+    x, y = button.coord()
+    self.device.click(int(x), int(y), control_name='sender_enemy_start')
+    deadline = monotonic() + 20
+    retry_at = monotonic() + 2
+    clicks = 1
+    while monotonic() < deadline:
+        self.screenshot()
+        if (self.appear(self.I_PREPARE_HIGHLIGHT) or self.is_in_real_battle(False)
+                or self.battle_result_visible()):
+            break
+        if monotonic() >= retry_at and clicks < 3 and self.appear(button):
+            x, y = button.coord()
+            self.device.click(int(x), int(y), control_name='sender_enemy_retry')
+            clicks += 1
+            retry_at = monotonic() + 2
+        sleep(.1)
+    else:
+        self.device.save_screenshot(genre='findjade_enemy_click_timeout', interval=0)
+        raise GameStuckError('探索点击后未确认准备或战斗页面')
     if not self.run_general_battle(self._config.general_battle_config):
         raise SenderBattleFailed('协作探索战斗失败，已停止避免重复消耗体力')
     self.minions_cnt += 1

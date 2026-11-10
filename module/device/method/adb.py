@@ -164,10 +164,28 @@ class Adb(Connection):
             logger.warning(f'Unexpected screenshot: {screenshot}')
         raise OSError(f'cannot load screenshot')
 
+    def _screencap_display_args(self):
+        # screencap needs the physical ID; Android input uses the logical ID.
+        now = time.monotonic()
+        cached = getattr(self, '_screencap_display_cache', None)
+        if cached and now - cached[0] < 2:
+            return cached[1]
+        logical = self.active_app_display_id()
+        args = []
+        if logical:
+            output = self.adb_shell(['dumpsys', 'display'])
+            match = re.search(r"DisplayViewport\{[^}]*displayId=" + str(logical)
+                              + r",\s*uniqueId='local:(\d+)'", output)
+            if not match:
+                raise OSError(f'Cannot map game display {logical} to a physical display')
+            args = ['-d', match.group(1)]
+        self._screencap_display_cache = (now, args)
+        return args
+
     @retry
     @Config.when(DEVICE_OVER_HTTP=False)
     def screenshot_adb(self):
-        data = self.adb_shell(['screencap', '-p'], stream=True)
+        data = self.adb_shell(['screencap', *self._screencap_display_args(), '-p'], stream=True)
         if len(data) < 500:
             logger.warning(f'Unexpected screenshot: {data}')
 
@@ -176,7 +194,7 @@ class Adb(Connection):
     @retry
     @Config.when(DEVICE_OVER_HTTP=True)
     def screenshot_adb(self):
-        data = self.adb_shell(['screencap'], stream=True)
+        data = self.adb_shell(['screencap', *self._screencap_display_args()], stream=True)
         if len(data) < 500:
             logger.warning(f'Unexpected screenshot: {data}')
 
@@ -184,7 +202,7 @@ class Adb(Connection):
 
     @retry
     def screenshot_adb_nc(self):
-        data = self.adb_shell_nc(['screencap'])
+        data = self.adb_shell_nc(['screencap', *self._screencap_display_args()])
         if len(data) < 500:
             logger.warning(f'Unexpected screenshot: {data}')
 

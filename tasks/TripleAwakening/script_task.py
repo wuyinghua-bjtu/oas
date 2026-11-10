@@ -1,4 +1,5 @@
 """Single controller for fire awakening floor ten, exactly fifteen team wins."""
+from module.config.local_values import local_text
 import copy
 from collections import deque
 import cv2
@@ -21,7 +22,7 @@ from tasks.TripleAwakening.device import TeamDevice
 
 
 WINDOWS = ('MuMu安卓设备-1', 'MuMu安卓设备-1-1', 'MuMu安卓设备-1-2')
-EXPECTED_NAMES = ('OASPlayer003', 'OASPlayer002', 'OASPlayer001')
+EXPECTED_NAMES = (local_text('LOCAL_SUPPORT_003'), local_text('LOCAL_SUPPORT_002'), local_text('LOCAL_SUPPORT_001'))
 MANAGER = Path('C:/Program Files/Netease/MuMu/nx_main/MuMuManager.exe')
 
 
@@ -76,22 +77,39 @@ class Participant(EvoTask):
         self.ui_goto(page_main)
         rule = RuleOcr(roi=(110,20,225,45), area=(110,20,225,45),
                        mode='Full', method='Default', keyword='', name='triple_nickname')
+        # The nickname row can also carry level digits, vip badges or the
+        # bottom navigation, so accept the most frequent real name instead of
+        # demanding that exactly one OCR row exists.
+        junk = {'组队', '阴阳寮', '商店', '探索', '召唤', '强化', '式神', '阴阳师',
+                '体力', '金币', '勾玉', '好友', '设置', '邮件', '签到'}
         previous = ''
-        deadline = min(self.deadline, time.monotonic() + 20)
+        deadline = min(self.deadline, time.monotonic() + 30)
         refreshed = False
+        retried = 0
         while time.monotonic() < deadline:
             self.screenshot()
             rows = [r.ocr_text.strip().replace(' ', '')
                     for r in rule.detect_and_ocr(self.device.image)]
-            names = [name for name in rows if name and not name.isdigit()]
-            name = names[0] if len(names) == 1 else ''
+            names = [text for text in rows
+                     if text and any(not ch.isdigit() for ch in text)
+                     and text not in junk and 2 <= len(text) <= 12]
+            name = names[0] if len(names) == 1 else (previous if previous in names else '')
             if name and name == previous:
                 return name
             previous = name
             if not name and not refreshed:
                 self.device.refresh_handle_tree()
                 refreshed = True
+            if not name and time.monotonic() - retried > 5:
+                # Usually the client is still sitting on the login page after a
+                # switch; push it to the main page again instead of giving up.
+                logger.warning('昵称区未读到文字，重新进入主界面（可能仍在登录页）')
+                self.ui_goto(page_main)
+                retried = time.monotonic()
             time.sleep(.4)
+        if previous:
+            logger.warning('角色名 OCR 不稳定，沿用最近一次读取结果：%s', previous)
+            return previous
         raise GameStuckError('无法稳定读取角色名，未发送邀请')
 
     def leave_existing_room(self):
@@ -113,6 +131,16 @@ class Participant(EvoTask):
             reward_words=''.join(r.ocr_text for r in reward_text.detect_and_ocr(self.device.image)).replace(' ', '')
             if '点击屏幕继续' in reward_words:
                 self.click(self.C_REWARD_1, interval=1)
+                continue
+            # A stopped account switch can leave the profile settings open.
+            # Require several settings labels before touching its close button.
+            settings = RuleOcr(roi=(540, 50, 510, 130), area=(540, 50, 510, 130),
+                               mode='Full', method='Default', keyword='', name='triple_settings')
+            settings_text = ''.join(''.join(r.ocr_text.split()) for r in settings.detect_and_ocr(self.device.image))
+            if '设置' in settings_text and '声音' in settings_text and '画质' in settings_text:
+                if time.monotonic() - last > 2:
+                    self.device.click(1109, 98, control_name='triple_close_settings')
+                    last = time.monotonic()
                 continue
             # The courtyard skin/story radial menu overlays the normal page
             # markers and can survive between tasks. Close only when multiple
@@ -165,8 +193,8 @@ class Participant(EvoTask):
                 last = time.monotonic()
 
     def detect_select(self, name=None):
-        # Shared invite OCR uses fuzzy keywords, which can mistake OASPlayer for
-        # OASPlayer001. Numeric suffixes must match exactly in this task.
+        # Shared invite OCR uses fuzzy keywords and can lose numeric suffixes.
+        # Numeric suffixes must match exactly in this task.
         if not name:
             return False
         self.screenshot()
@@ -354,11 +382,17 @@ class ScriptTask(EvoTask):
             logger.info('阵容锁定图标上半部已确认: %.3f', scores[0])
         else:
             leader.check_lock(True)
-        while True:
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
             leader.screenshot()
-            if leader.appear(leader.I_CHECK_TEAM):
+            # The team-page marker can appear during its transition; wait
+            # for the actionable create button before handing off.
+            if leader.appear(leader.I_CREATE_ROOM):
                 break
-            leader.appear_then_click(leader.I_FORM_TEAM, interval=1)
+            leader.appear_then_click(leader.I_FORM_TEAM, interval=2)
+            time.sleep(.3)
+        else:
+            raise GameStuckError('组队页面未出现创建房间按钮')
         if not leader.create_room() or not leader.ensure_private() or not leader.create_ensure():
             raise GameStuckError('创建私人房间失败')
         if not leader.ensure_room_type(invite_number):
@@ -397,6 +431,7 @@ class ScriptTask(EvoTask):
     def wait_room(players, final=False):
         for p in players:
             p.step('等待三人进入同一私人房间', 90)
+        last_reinvite = time.monotonic()
         while True:
             ready = []
             for index,p in enumerate(players):
@@ -418,11 +453,32 @@ class ScriptTask(EvoTask):
                             raise GameStuckError('邀请来源未确认是本队队长，停止接受')
                         if '觉醒业火轮拾层' not in text:
                             raise GameStuckError('邀请未确认是火麒麟十层：' + text)
-                        p.check_then_accept()
+                        # A single accept can disappear without joining (for
+                        # example a delayed invitation). Return to the shared
+                        # loop so the leader can resend to that exact member.
+                        p.appear_then_click(p.I_I_ACCEPT, interval=2)
                 p.screenshot()
                 ready.append(p.is_in_room())
             if all(ready):
                 return
+            if ready[0] and time.monotonic() - last_reinvite >= 12:
+                for index in range(1, len(players)):
+                    if not ready[index]:
+                        name = players[index].expected_name
+                        if not name:
+                            raise GameStuckError('缺少队员身份，不能重新邀请')
+                        # Recheck the leader immediately: the member may
+                        # have joined after its own screenshot was taken.
+                        leader = players[0]
+                        leader.screenshot()
+                        if not (leader.appear(leader.I_ADD_1) or leader.appear(leader.I_ADD_2)):
+                            last_reinvite = time.monotonic()
+                            break
+                        logger.warning('队员 %s 尚未入队，重新发送邀请', name)
+                        if not leader.invite_friend(name):
+                            raise GameStuckError('无法重新邀请队员：' + name)
+                        last_reinvite = time.monotonic()
+                        break
             time.sleep(.3)
 
     @staticmethod

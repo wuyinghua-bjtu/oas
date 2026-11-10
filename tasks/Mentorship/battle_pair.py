@@ -1,4 +1,5 @@
 """Bounded two-device battle handling for the mentorship task."""
+from module.config.local_values import local_text
 import time
 from dataclasses import dataclass
 
@@ -27,7 +28,7 @@ def clear_verified_statistics(device, apprentice_name, timeout=12):
             return handled
         words = ''.join(x.ocr_text for x in footer.detect_and_ocr(frame)).replace(' ', '')
         identities = ''.join(x.ocr_text for x in names.detect_and_ocr(frame)).replace(' ', '')
-        if '点击空白区域继续' not in words or 'OASPlayer' not in identities or apprentice_name not in identities:
+        if '点击空白区域继续' not in words or local_text('LOCAL_SUPPORT_') not in identities or apprentice_name not in identities:
             raise RuntimeError('师徒结算页身份或继续提示未确认')
         if time.monotonic() - last_click >= 1.5:
             device.click(640, 695, control_name='mentorship_resume_statistics')

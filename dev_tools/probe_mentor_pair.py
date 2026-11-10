@@ -1,5 +1,6 @@
 """Probe one private-room invitation, then leave without starting a fight."""
 import os
+from module.config.local_values import local_text
 import time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
@@ -59,7 +60,7 @@ try:
     candidate = None
     for _ in range(15):
         m.screenshot()
-        candidate = find_guard_candidate(m.image, '冥界画师03')
+        candidate = find_guard_candidate(m.image, local_text('LOCAL_OCR_NAME03'))
         if candidate:
             break
         time.sleep(.3)

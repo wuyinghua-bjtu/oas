@@ -19,8 +19,8 @@ class EyeFlowTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.old_cwd = os.getcwd()
         os.chdir(self.temp.name)
-        self.a = NS(character='小号一', account='abcd123@example.test')
-        self.b = NS(character='小号二', account='wxyz123@example.test')
+        self.a = NS(character='小号一', account='abcd123@example.test', svr='测试服')
+        self.b = NS(character='小号二', account='wxyz123@example.test', svr='测试服')
         selection = NS(characters='小号一\n小号二', server='测试服')
         eye = NS(scheduler=NS(enable=True), options=NS(max_battles_per_account=10))
         model = NS(guild_quick_participation=NS(guild_accounts=selection), eye_awakening=eye)
@@ -39,7 +39,7 @@ class EyeFlowTest(unittest.TestCase):
         self.task.run_general_battle = lambda config: True
         self.task.inventory_counts = lambda: {5: 2, 6: 1}
         self.task.leave_inventory = lambda: None
-        self.patches = [patch('tasks.EyeAwakening.script_task.select_accounts', return_value=[self.a, self.b]),
+        self.patches = [patch('tasks.EyeAwakening.script_task.resolve_eye_accounts', return_value=[self.a, self.b]),
                         patch('tasks.EyeAwakening.script_task.FindJadeTask.switch_support_account', return_value=True),
                         patch('tasks.EyeAwakening.script_task.one_selected', return_value=True),
                         patch('tasks.EyeAwakening.script_task.notify_completion', return_value='accepted')]

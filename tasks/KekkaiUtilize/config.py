@@ -38,6 +38,7 @@ class UtilizeConfig(BaseModel):
     box_ap_enable: bool = Field(default=True, description='box_ap_enable_help')
     box_exp_enable: bool = Field(default=True, description='box_exp_enable_help')
     box_exp_waste: bool = Field(default=True, description='box_exp_waste_help')
+    target_friend_names: str = Field(default='', description='指定好友昵称，多个用逗号分隔；留空则翻列表找')
 
 
 class KekkaiUtilize(ConfigBase):

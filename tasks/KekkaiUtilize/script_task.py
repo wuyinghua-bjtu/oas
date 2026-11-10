@@ -9,6 +9,7 @@ from datetime import timedelta, datetime
 from module.base.timer import Timer
 from module.atom.click import RuleClick
 from module.atom.image_grid import ImageGrid
+from module.atom.ocr import RuleOcr
 from module.logger import logger
 from module.exception import TaskEnd
 
@@ -142,10 +143,17 @@ class ScriptTask(GameUi, ReplaceShikigami, KekkaiUtilizeAssets):
                 logger.info('Foster placement completed and verified; KekkaiUtilize may end')
                 return
             else:
-                self.back_realm()
+                if not self.back_realm():
+                    self.set_next_run(task='KekkaiUtilize',
+                                      target=datetime.now() + timedelta(minutes=3))
+                    raise TaskEnd('Foster return unconfirmed; retry in 3 minutes')
                 if self._utilize_retry_delay:
-                    logger.warning('No four-star or better foster card; retry in 3 minutes')
-                    self.push_notify(content='前十位没有四星以上太鼓或斗鱼，3分钟后继续重扫')
+                    if con.target_friend_names.strip():
+                        logger.warning('Specified friend search incomplete; retry search in 3 minutes')
+                        self.push_notify(content='指定好友搜索未完成或未找到可用卡，3分钟后只重试搜索')
+                    else:
+                        logger.warning('No four-star or better foster card; retry in 3 minutes')
+                        self.push_notify(content='前十位没有四星以上太鼓或斗鱼，3分钟后继续重扫')
                     # Keep this task active so lower-priority tasks cannot run
                     # before foster placement has been verified.
                     time.sleep(self._utilize_retry_delay)
@@ -584,6 +592,142 @@ class ScriptTask(GameUi, ReplaceShikigami, KekkaiUtilizeAssets):
             raise ValueError('Unknown utilize rule')
         return result
 
+    # ---------------- 指定好友搜索 ---------------- #
+    def _search_friend_by_name(self, name: str, friend_list: SelectFriendList) -> bool:
+        """在当前好友列表标签下搜索指定好友名。
+
+        流程：切到对应标签 -> 点放大镜 -> 清空输入框 -> 输入昵称 -> 点确定搜索。
+        :return: 搜索操作是否成功发起（不代表一定搜到）
+        """
+        if not re.fullmatch(r'[A-Za-z0-9_.-]{1,40}', name):
+            logger.warning('Search name requires a supported text input interface')
+            return False
+        self.screenshot()
+        if self.device.image.shape[:2] != (720, 1280):
+            return False
+        if not (self.appear(self.O_UTILIZE_FRIEND_LIST_TITLE)
+                or self.appear(self.I_UTILIZE_FRIEND_GROUP)
+                or self.appear(self.I_UTILIZE_ZONES_GROUP)):
+            return False
+        if friend_list == SelectFriendList.SAME_SERVER:
+            self.device.click(274, 125, control_name='UTILIZE_FRIEND_TAB')
+        else:
+            self.device.click(390, 125, control_name='UTILIZE_CROSS_ZONE_TAB')
+        time.sleep(1.2)
+
+        # 点放大镜图标（跨区标签右侧）
+        self.screenshot()
+        if '搜索' not in self._friend_search_text((530, 160, 95, 55)):
+            self.device.click(600, 125, control_name='UTILIZE_SEARCH_ICON')
+            time.sleep(1.0)
+
+        # 点输入区域（搜索框弹出后的文本输入位置）
+        self.screenshot()
+        if '搜索' not in self._friend_search_text((530, 160, 95, 55)):
+            return False
+        self.device.click(350, 186, control_name='UTILIZE_SEARCH_INPUT')
+        time.sleep(0.6)
+
+        # 清空已有内容（全选删除），再输入新昵称
+        # 用 ADB input text 输入（英文/数字直接可用）
+        try:
+            focus = self.device.adb_shell(['dumpsys', 'window'])
+            display = self.device.active_app_display_id()
+            if (f'mTopFocusedDisplayId={display}' not in focus
+                    or not any('mCurrentFocus=' in line and self.device.package in line
+                               for line in focus.splitlines())):
+                logger.warning('Search keyboard focus is not on the current game display')
+                return False
+            for attempt in range(3):
+                self.device.click(350, 186, control_name='UTILIZE_SEARCH_INPUT_RETRY')
+                time.sleep(1)
+                input_state = self.device.adb_shell(['dumpsys', 'input_method'])
+                if ('mServedInputConnection=' not in input_state
+                        or 'android.widget.EditText' not in input_state
+                        or f'packageName={self.device.package}' not in input_state):
+                    logger.warning('Search editor is not ready on attempt %s/3', attempt + 1)
+                    continue
+                self.device.adb_shell(['input', 'keyevent', '123'])
+                self.device.adb_shell(['input', 'keyevent', *(['67'] * 40)])
+                self.device.adb_shell(['input', 'text', name])
+                time.sleep(1)
+                self.screenshot()
+                if self._friend_search_text((220, 162, 270, 48)) == name:
+                    break
+            else:
+                logger.warning('Friend search input failed after three verified-focus attempts')
+                return False
+        except Exception as e:
+            logger.warning(f'adb input text({name}) failed: {e}')
+            return False
+        time.sleep(0.5)
+
+        # 点"确定"按钮执行搜索
+        self.screenshot()
+        if self._friend_search_text((220, 162, 270, 48)) != name:
+            logger.warning('Friend search input was not verified')
+            return False
+        self.device.click(577, 187, control_name='UTILIZE_SEARCH_CONFIRM')
+        time.sleep(1.5)
+        logger.info(f'Searched friend: {name} on {friend_list}')
+        return True
+
+    def _friend_search_text(self, roi):
+        reader = RuleOcr(roi=roi, area=roi, mode='Full', method='Default',
+                         keyword='', name='utilize_named_search')
+        return ''.join(str(box.ocr_text).strip()
+                       for box in reader.detect_and_ocr(self.device.image))
+
+    def _select_search_result_card(self, name, best_type=None, best_value=0):
+        roi = (310, 220, 285, 345)
+        reader = RuleOcr(roi=roi, area=roi, mode='Full', method='Default',
+                         keyword='', name='utilize_named_rows')
+        previous = None
+        selected = []
+        for attempt in range(6):
+            self.screenshot()
+            if self._friend_search_text((220, 162, 270, 48)) != name:
+                return False
+            matches = [box for box in reader.detect_and_ocr(self.device.image)
+                       if str(box.ocr_text).strip() == name]
+            if matches:
+                positions = sorted((int(sum(point[0] for point in match.box) / 4 + roi[0]),
+                                    int(sum(point[1] for point in match.box) / 4 + roi[1]))
+                                   for match in matches)
+                if (previous is not None and len(positions) == len(previous)
+                        and all(abs(current[0] - old[0]) <= 8
+                                and abs(current[1] - old[1]) <= 8
+                                for current, old in zip(positions, previous))):
+                    for position in positions:
+                        if any(abs(position[1] - old[1]) <= 8 for old in selected):
+                            continue
+                        selected.append(position)
+                        self.device.click(*position, control_name='UTILIZE_EXACT_SEARCH_RESULT')
+                        time.sleep(1)
+                        kind, value = self.check_card_num()
+                        minimum = {'太鼓': 59, '斗鱼': 84}.get(kind)
+                        if minimum is None or value < max(minimum, best_value):
+                            continue
+                        if best_type is not None and kind != best_type:
+                            continue
+                        self.jade_max_num = value if kind == '太鼓' else 0
+                        self.ap_max_num = value if kind == '斗鱼' else 0
+                        return True
+                    return False
+                previous = positions
+            else:
+                previous = None
+            time.sleep(0.5)
+        return False
+
+    def _close_friend_search(self):
+        """关闭搜索结果，回到普通好友列表。"""
+        # 点搜索框右侧的 X 或取消按钮
+        self.screenshot()
+        if '搜索' in self._friend_search_text((530, 160, 95, 55)):
+            self.device.click(600, 125, control_name='UTILIZE_SEARCH_CLOSE')
+            time.sleep(0.8)
+
     def run_utilize(self, friend: SelectFriendList = SelectFriendList.SAME_SERVER,
                     shikigami_class: ShikigamiClass = ShikigamiClass.N,
                     shikigami_order: int = 7):
@@ -613,8 +757,65 @@ class ScriptTask(GameUi, ReplaceShikigami, KekkaiUtilizeAssets):
                     return index
             return 99
 
+        # ---------------- 指定好友搜索分支 ---------------- #
+        target_names = [n.strip() for n in
+                        (self.config.kekkai_utilize.utilize_config.target_friend_names or '').split(',')
+                        if n.strip()]
+        if target_names:
+            logger.info(f'Specified friend search mode: {target_names}')
+            best_overall = None  # (card_type, card_value, friend_list, search_name)
+            for name in target_names:
+                for friend_list in (SelectFriendList.DIFFERENT_SERVER,):
+                    logger.info(f'Searching "{name}" on {friend_list}')
+                    if not self._search_friend_by_name(name, friend_list):
+                        logger.warning(f'Search failed for {name} on {friend_list}')
+                        continue
+                    # 在搜索结果中找卡
+                    self.ap_max_num, self.jade_max_num = 0, 0
+                    if not self._select_search_result_card(name):
+                        self._close_friend_search()
+                        continue
+                    # 比较当前结果
+                    if self.jade_max_num > 0:
+                        cand = ('太鼓', self.jade_max_num, friend_list, name)
+                        if (best_overall is None
+                                or resource_index('太鼓', self.jade_max_num)
+                                   < resource_index(best_overall[0], best_overall[1])
+                                or (resource_index('太鼓', self.jade_max_num)
+                                    == resource_index(best_overall[0], best_overall[1])
+                                    and self.jade_max_num > best_overall[1])):
+                            best_overall = cand
+                            logger.info(f'New best taiko: {name} {self.jade_max_num} on {friend_list}')
+                    if self.ap_max_num > 0:
+                        cand = ('斗鱼', self.ap_max_num, friend_list, name)
+                        if (best_overall is None
+                                or resource_index('斗鱼', self.ap_max_num)
+                                   < resource_index(best_overall[0], best_overall[1])
+                                or (resource_index('斗鱼', self.ap_max_num)
+                                    == resource_index(best_overall[0], best_overall[1])
+                                    and self.ap_max_num > best_overall[1])):
+                            best_overall = cand
+                            logger.info(f'New best fish: {name} {self.ap_max_num} on {friend_list}')
+                    self._close_friend_search()
+
+            if best_overall is None:
+                logger.warning('No usable card found in any specified friend search')
+                self._utilize_retry_delay = 180
+                return False
+
+            best_type, best_value, best_list, best_name = best_overall
+            logger.info(f'Best specified friend card: {best_name} -> {best_type} @ {best_value} ({best_list})')
+            # 重新搜索并确认选择这张卡，选中后直接落入下方"找到卡"流程
+            if not self._search_friend_by_name(best_name, best_list):
+                self._utilize_retry_delay = 180
+                return False
+            time.sleep(1)
+            if not self._select_search_result_card(best_name, best_type, best_value):
+                logger.warning(f'Selected card disappeared for {best_name}; retry next round')
+                self._utilize_retry_delay = 180
+                return False
         selection_retry = 0
-        while True:
+        while not target_names:
             candidates = {}
             perfect_selection = None
             for friend_list in (SelectFriendList.SAME_SERVER,
@@ -780,11 +981,17 @@ class ScriptTask(GameUi, ReplaceShikigami, KekkaiUtilizeAssets):
         # realm first, then return through the normal realm navigation before
         # checking the decreasing timer.
         logger.info('Foster confirmation closed; return to own realm for verification')
-        self.back_realm()
-        self.ui_get_current_page()
-        self._goto_guild_or_retry()
-        self.goto_realm()
-        self.realm_goto_grown()
+        if not self.back_realm():
+            self._utilize_retry_delay = 180
+            return False
+        self.screenshot()
+        if not self.appear(self.I_RS_RECORDS_SHIKI):
+            if not (self.appear(self.I_REALM_SHIN)
+                    or self.appear_multi_scale(self.I_SHI_DEFENSE)):
+                self.ui_get_current_page()
+                self._goto_guild_or_retry()
+                self.goto_realm()
+            self.realm_goto_grown()
         self.screenshot()
         remaining = self._verify_foster_timer(confirmed_placement=True)
         if not remaining:
@@ -1087,17 +1294,37 @@ class ScriptTask(GameUi, ReplaceShikigami, KekkaiUtilizeAssets):
                 continue
 
     def back_realm(self):
-        # 回到寮结界
-        while 1:
+        started = time.monotonic()
+        fallback_count = 0
+        last_fallback = started
+        while time.monotonic() - started < 25:
             self.screenshot()
-            if self.appear(self.I_REALM_SHIN):
-                break
-            if self.appear_multi_scale(self.I_SHI_DEFENSE):
-                break
+            if (self.appear(self.I_RS_RECORDS_SHIKI)
+                    and not self.appear(self.O_UTILIZE_FRIEND_LIST_TITLE)):
+                return True
+            if (self.appear(self.I_REALM_SHIN)
+                    or self.appear_multi_scale(self.I_SHI_DEFENSE)
+                    or self.appear(page_guild.check_button)
+                    or self.appear(page_main.check_button)):
+                return True
             if self.appear_then_click(self.I_UI_BACK_RED, interval=1):
+                time.sleep(0.5)
                 continue
             if self.appear_then_click(self.I_UI_BACK_BLUE, interval=1):
+                time.sleep(0.5)
                 continue
+            now = time.monotonic()
+            if fallback_count < 3 and now - last_fallback >= 3:
+                if not self.device.app_is_running():
+                    return False
+                self.device.adb_shell(['input', '-d', str(self.device.active_app_display_id()),
+                                       'keyevent', '4'])
+                fallback_count += 1
+                last_fallback = now
+                logger.info('Foster return: display-aware Back fallback %s/3', fallback_count)
+            time.sleep(0.5)
+        logger.warning('Foster return unconfirmed after 25 seconds')
+        return False
 
 
 if __name__ == "__main__":

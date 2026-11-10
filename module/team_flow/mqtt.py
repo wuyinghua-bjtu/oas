@@ -2,6 +2,7 @@
 # @author runhey
 # github https://github.com/runhey
 from time import sleep
+from module.config.local_values import local_text
 
 import json
 from random import randint
@@ -144,12 +145,12 @@ class Mqtt:
 
 if __name__ == '__main__':
     team_flow = TeamFlow()
-    team_flow.broker = 'mqtt.example.invalid'
+    team_flow.broker = local_text('LOCAL_MQTT_BROKER')
     team_flow.port = 8883
     team_flow.transport = Transport.SSL_TLS
     team_flow.ca = './config/emqxsl-ca.crt'
-    team_flow.username = 'PUBLIC_CONFIG_REQUIRED'
-    team_flow.password = 'PUBLIC_CONFIG_REQUIRED'
+    team_flow.username = local_text('LOCAL_MQTT_USERNAME')
+    team_flow.password = local_text('LOCAL_MQTT_PASSWORD')
     mqtt = Mqtt(team_flow)
     sleep(20)
 

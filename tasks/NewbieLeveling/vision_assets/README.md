@@ -60,7 +60,7 @@ No future dialogue screen or generic confirmation behavior is implied.
 ### Measured idle animation, 2026-09-08
 
 Twelve original native frames from
-`C:/Users/OASUser/AppData/Local/Temp/oas-leveling-scene-motion/` are preserved as
+`C:/Users/wyh/AppData/Local/Temp/oas-leveling-scene-motion/` are preserved as
 `dev_tools/fixtures/newbie_leveling/story_scene_motion/*.png` (suffixes 00-11).
 Inspection of frames 00, 05 and 11 showed only character/umbrella/fox idle motion;
 all twelve decoration/back/bubble correlations are 0.998-1.000. The old fixed
@@ -89,7 +89,7 @@ The original dialogue capture is
 `log/newbie_leveling/oas_leveling/20260908-214201-488032-paused.png`, preserved
 unchanged as `dev_tools/fixtures/newbie_leveling/story_dialogue_1280.png`.
 The eight native frames from
-`C:/Users/OASUser/AppData/Local/Temp/oas-leveling-dialog-continue/` are preserved
+`C:/Users/wyh/AppData/Local/Temp/oas-leveling-dialog-continue/` are preserved
 unchanged under `dev_tools/fixtures/newbie_leveling/story_eye_motion/`.
 Inspection of eye frames 00,03,07 confirms a large gold-ring eye at the top
 center, not a text dialogue; only foreground characters/umbrella move.
@@ -139,7 +139,7 @@ rules support only the recorded camera/UI variants, not every future dialogue.
 The original stopped screenshot
 `log/newbie_leveling/oas_leveling/20260908-220233-481142-paused.png` is preserved
 as `story_eye_reentry_1280.png`. Eight unchanged frames from
-`C:/Users/OASUser/AppData/Local/Temp/oas-leveling-after-eye/` are preserved under
+`C:/Users/wyh/AppData/Local/Temp/oas-leveling-after-eye/` are preserved under
 `dev_tools/fixtures/newbie_leveling/story_eye_reentry_motion/`.
 
 This failure was **not only idle animation**. Returning to the courtyard and

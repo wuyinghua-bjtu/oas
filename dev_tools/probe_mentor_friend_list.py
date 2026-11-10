@@ -1,5 +1,6 @@
 """Record the current online friend list and safely leave the test room."""
 import os
+from module.config.local_values import local_text
 import time
 import cv2
 from module.config.config import Config
@@ -11,7 +12,7 @@ from tasks.Component.GeneralInvite.assets import GeneralInviteAssets as Invite
 mc, ac = Config('oas1'), Config('oas_leveling')
 validate_profiles(mc, ac)
 m, a = BoundDevice(mc), BoundDevice(ac)
-pair = NormalDevices(m, a, '冥界画师03')
+pair = NormalDevices(m, a, local_text('LOCAL_OCR_NAME03'))
 created = False
 try:
     created = create_private_room(m, 'experience')

@@ -80,5 +80,10 @@
   "apprentice_name": "徒弟角色名",
   "apprentice_server": "徒弟服务器",
   "mentorship_apprentice_name_help": "填写 oas_leveling 小号列表中的角色名",
-  "mentorship_apprentice_server_help": "填写该角色所在的服务器"
+  "mentorship_apprentice_server_help": "填写该角色所在的服务器",
+  "eye_account_1": "第1个小号（先执行）",
+  "eye_account_2": "第2个小号",
+  "eye_account_3": "第3个小号",
+  "eye_account_4": "第4个小号（最后执行）",
+  "max_battles_per_account": "每个小号战斗次数上限"
 }

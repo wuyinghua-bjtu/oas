@@ -197,16 +197,57 @@ class BaseTask(GlobalGameAssets, CostumeBase):
     def handle_remote_login_dialog(self):
         """Confirm only the specific session-loss dialog, then unwind the task."""
         if not self.appear(self.I_REMOTE_LOGIN_NOTICE):
-            return
-        if not self.appear(self.I_REMOTE_LOGIN_CONFIRM):
-            return
+            if not self._remote_login_text_match():
+                return
+        elif not self.appear(self.I_REMOTE_LOGIN_CONFIRM):
+            if not self._remote_login_text_match():
+                return
         logger.warning('Account logged in on another device; confirm and relogin')
         self.device.save_screenshot(genre='remote_login', interval=60)
         self.device.stuck_record_clear()
         self.device.click_record_clear()
-        x, y = self.I_REMOTE_LOGIN_CONFIRM.front_center()
+        if self.appear(self.I_REMOTE_LOGIN_CONFIRM):
+            x, y = self.I_REMOTE_LOGIN_CONFIRM.front_center()
+        else:
+            x, y = self._remote_login_confirm_point()
         self.device.click(x, y, control_name='REMOTE_LOGIN_CONFIRM')
         raise GameSessionExpiredError('Other-device login dialog confirmed')
+
+    def _remote_login_panel_text(self):
+        """OCR the session-loss dialog; templates drift with skin/render scale."""
+        image = self.device.image
+        if image is None or image.ndim != 3 or image.shape[:2] != (720, 1280):
+            return ''
+        if time() - getattr(self, '_remote_login_ocr_at', 0) < 2:
+            return getattr(self, '_remote_login_ocr_text', '')
+        self._remote_login_ocr_at = time()
+        box = (430, 285, 420, 150)
+        reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                         keyword='', name='remote_login_dialog')
+        rows = reader.detect_and_ocr(image)
+        self._remote_login_ocr_text = ''.join(row.ocr_text for row in rows).replace(' ', '')
+        return self._remote_login_ocr_text
+
+    def _remote_login_text_match(self):
+        text = self._remote_login_panel_text()
+        matched = ('其他设备' in text and '登录' in text) or '检测到账号' in text
+        if matched:
+            logger.warning('检测到其他设备登录弹窗（OCR 兜底命中）：%s', text)
+        return matched
+
+    def _remote_login_confirm_point(self):
+        """Locate the 确定 button next to the dialog text, else use its centre."""
+        box = (430, 285, 420, 180)
+        reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                         keyword='', name='remote_login_confirm')
+        for row in reader.detect_and_ocr(self.device.image):
+            if row.ocr_text.replace(' ', '') in ('确定', '确认', '知道了'):
+                points = row.box
+                x = box[0] + sum(float(p[0]) for p in points) / len(points)
+                y = box[1] + sum(float(p[1]) for p in points) / len(points)
+                if 430 <= x <= 850 and 285 <= y <= 465:
+                    return int(x), int(y)
+        return 640, 402
 
     def handle_optional_engine_update(self):
         """Dismiss only the observed optional engine-update dialog."""

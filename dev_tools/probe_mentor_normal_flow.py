@@ -1,5 +1,6 @@
 """Exercise the experience room handshake and leave both without fighting."""
 import sys
+from module.config.local_values import local_text
 from module.config.config import Config
 from tasks.Mentorship.device import BoundDevice, validate_profiles
 from tasks.Mentorship.normal_device import NormalDevices
@@ -8,7 +9,7 @@ from tasks.Mentorship.private_room import create_private_room
 mc, ac = Config('oas1'), Config('oas_leveling')
 validate_profiles(mc, ac)
 master, apprentice = BoundDevice(mc), BoundDevice(ac)
-pair = NormalDevices(master, apprentice, '冥界画师03')
+pair = NormalDevices(master, apprentice, local_text('LOCAL_OCR_NAME03'))
 created = False
 activity = sys.argv[1] if len(sys.argv) > 1 else 'experience'
 try:

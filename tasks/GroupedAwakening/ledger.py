@@ -37,7 +37,7 @@ def finalize_settled_round(entry, windows, finished_at):
     """Credit once only when durable evidence confirms every win and settlement."""
     pending = entry.get('pending_round', {})
     expected_round = entry['completed'] + 1
-    if (not entry.get('battle_in_progress') or entry.get('battle_phase') != 'fighting'
+    if (entry.get('recovery_identity_required') or not entry.get('battle_in_progress') or entry.get('battle_phase') != 'fighting'
             or entry.get('active_round') != expected_round
             or pending.get('round') != expected_round
             or expected_round > entry['target']):

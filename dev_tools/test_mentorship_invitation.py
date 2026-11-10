@@ -11,7 +11,7 @@ from tasks.Mentorship.invitation import accept_guard_invitation, invite_guard_wi
 
 class InvitationTests(unittest.TestCase):
     def test_banner_moves_and_other_pages_are_ignored(self):
-        p = Path(r'C:\Users\OASUser\AppData\Local\Temp\codex-clipboard-23ffb638-c6cc-4b62-841c-cd3b56868f48.png')
+        p = Path(r'C:\Users\wyh\AppData\Local\Temp\codex-clipboard-23ffb638-c6cc-4b62-841c-cd3b56868f48.png')
         image = cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2RGB)
         self.assertEqual(guard_accept_position(image), (140, 250))
         shifted = np.zeros_like(image)

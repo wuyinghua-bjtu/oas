@@ -1,11 +1,12 @@
 from dataclasses import dataclass
+from module.config.local_values import local_text
 from datetime import date
 from typing import Literal
 
 
 @dataclass(frozen=True)
 class MentorSettings:
-    apprentice_name: str = 'OASPlayer004'
+    apprentice_name: str = local_text('LOCAL_SUPPORT_004')
     apprentice_server: str = '砂狐乐园'
     mentor_profile: str = 'oas1'
     apprentice_profile: str = 'oas_leveling'

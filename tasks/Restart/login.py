@@ -60,10 +60,12 @@ class LoginHandler(BaseTask, RestartAssets, GameUiAssets, GeneralBuffAssets):
                 continue
             if self.device.last_screenshot_black:
                 black_screen_count += 1
-                logger.warning('Login capture is pure black (%s/3)', black_screen_count)
-                if black_screen_count >= 3:
+                logger.warning('Login capture is pure black (%s/8)', black_screen_count)
+                # A freshly restarted client stays black for tens of seconds;
+                # only give up after about 40s of continuous black frames.
+                if black_screen_count >= 8:
                     raise GameBlackScreenError('Pure-black login capture')
-                time.sleep(1)
+                time.sleep(5)
                 continue
             black_screen_count = 0
             # A darkened courtyard remains recognizable behind this modal.
