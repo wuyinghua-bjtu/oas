@@ -23,7 +23,7 @@ class SwitchAccount(LoginAccount, ExitGame, GameUi, SwitchAccountAssets):
 
     @staticmethod
     def verification_name(text):
-        return re.sub(r'[\s#·•]', '', text or '').rstrip('。.,，')
+        return re.sub(r'[\s#·•]', '', text or '').rstrip('。.,，、★')
 
     def __init__(self, config: Config, device: Device, to: AccountInfo, frm: AccountInfo = None):
         """
@@ -89,7 +89,7 @@ class SwitchAccount(LoginAccount, ExitGame, GameUi, SwitchAccountAssets):
 
         # Keep the nickname and its numeric suffix, excluding the decorative
         # badge on the right that some profile frames read as an extra "人".
-        name_ocr = RuleOcr(roi=(125,25,150,32), area=(125,25,150,32),
+        name_ocr = RuleOcr(roi=(125,25,120,32), area=(125,25,120,32),
                            mode='Single', method='Default', keyword='', name='switch_character_verify')
         observed = ''
         for _ in range(3):

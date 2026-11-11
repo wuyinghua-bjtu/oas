@@ -13,6 +13,7 @@ from module.exception import GameStuckError, ScriptEnd, TaskEnd
 from module.logger import logger
 from tasks.Component.GeneralBattle.config_general_battle import GeneralBattleConfig
 from tasks.Component.RightActivity.assets import RightActivityAssets
+from tasks.Component.SwitchAccount.switch_account import SwitchAccount
 from tasks.EvoZone.script_task import ScriptTask as EvoTask
 from tasks.EyeAwakening.progress import MAP_EYE, ProgressUncertain, read_map_quota, read_drop_popup_quota
 from tasks.EyeAwakening.inventory import InventoryUncertain, read_inventory_frame, combine_boundaries
@@ -29,7 +30,7 @@ ONE_SELECTED = RuleImage(roi_front=(94, 106, 128, 39), roi_back=(88, 98, 150, 55
                          file='./tasks/EyeAwakening/one_selected.png')
 ONE_CLICK = RuleClick((130, 112, 45, 25), (130, 112, 45, 25), 'eye_awakening_one')
 BACK = RuleClick((27, 25, 25, 23), (27, 25, 25, 23), 'eye_awakening_back')
-NICK = RuleOcr(roi=(125,25,150,32), area=(125,25,150,32), mode='Single',
+NICK = RuleOcr(roi=(125,25,120,32), area=(125,25,120,32), mode='Single',
                method='Default', keyword='', name='eye_account_name')
 
 
@@ -44,14 +45,65 @@ def one_selected(image):
 
 
 class ScriptTask(EvoTask):
+    def dismiss_activity_story(self):
+        # Only an exact skip label in the story toolbar permits this click.
+        box = (1120, 0, 160, 85)
+        reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                         keyword='', name='eye_activity_story_skip')
+        rows = [row for row in reader.detect_and_ocr(self.device.image)
+                if row.ocr_text.replace(' ', '').strip() == '跳过']
+        if len(rows) != 1:
+            return self.dismiss_activity_overlay()
+        points = rows[0].box
+        bounds = (int(box[0] + points[:, 0].min()),
+                  int(box[1] + points[:, 1].min()),
+                  max(1, int(np.ptp(points[:, 0]))),
+                  max(1, int(np.ptp(points[:, 1]))))
+        button = RuleClick(bounds, bounds, name='eye_activity_story_skip')
+        return bool(self.click(button, interval=1.5))
+
+    def dismiss_activity_overlay(self):
+        box = (440, 100, 650, 530)
+        reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                         keyword='', name='eye_activity_overlay')
+        rows = reader.detect_and_ocr(self.device.image)
+        texts = [row.ocr_text.replace(' ', '') for row in rows]
+        if '补给领取' in texts:
+            # The close icon is pink; confirm it within this popup's corner.
+            region = self.device.image[100:210, 960:1100, :3].astype('int16')
+            red, green, blue = region[:, :, 0], region[:, :, 1], region[:, :, 2]
+            ys, xs = np.where((red > 150) & (blue > 80) & (red > green * 1.4))
+            if len(xs) >= 20:
+                bounds = (960 + int(np.median(xs)), 100 + int(np.median(ys)), 1, 1)
+                return bool(self.click(RuleClick(bounds, bounds, 'eye_supply_close'), interval=2))
+            return False
+        for row in rows:
+            if row.ocr_text.replace(' ', '').endswith('任意位置继续'):
+                points = row.box
+                bounds = (box[0] + int(points[:, 0].mean()),
+                          box[1] + int(points[:, 1].mean()), 1, 1)
+                return bool(self.click(RuleClick(bounds, bounds, 'eye_activity_tutorial_continue'), interval=2))
+        return False
+
+    def try_close_unknown_page(self, skip_screenshot=True):
+        self.maybe_screenshot(skip_screenshot)
+        if self.dismiss_activity_story():
+            return True
+        return super().try_close_unknown_page(skip_screenshot=True)
+
     def open_inventory(self):
         if not self.ui_goto(page_main):
             raise InventoryUncertain('未能返回庭院查看库存')
         deadline = time.monotonic() + 60
+        toggle_attempts = 0
         while time.monotonic() < deadline:
             self.screenshot()
             if self.appear(MD.I_CRAFT_TITLE_2026):
                 return
+            if self.dismiss_activity_story():
+                continue
+            if self.appear_then_click(MD.I_ENTER_ENSURE, interval=2):
+                continue
             if self.appear_then_click(MD.I_CRAFTING_1, interval=2):
                 continue
             if self.appear_then_click(MD.I_ENTER2, interval=2):
@@ -59,7 +111,11 @@ class ScriptTask(EvoTask):
             if self.appear_then_click(MD.I_RIGHT_ENTER, interval=2):
                 continue
             if self.appear(self.I_CHECK_MAIN):
-                self.appear_then_click(RightActivityAssets.I_TOGGLE_BUTTON, interval=3)
+                if toggle_attempts >= 2:
+                    raise InventoryUncertain('庭院活动入口未识别，停止重复展开侧栏')
+                if self.appear_then_click(RightActivityAssets.I_TOGGLE_BUTTON, interval=3):
+                    toggle_attempts += 1
+                    time.sleep(1)
             time.sleep(.4)
         raise InventoryUncertain('未能确认进入裂变之眼合成列表')
 
@@ -107,9 +163,12 @@ class ScriptTask(EvoTask):
             if self.appear(self.I_CHECK_MAIN):
                 self.ui_current = page_main
                 return
+            if self.dismiss_activity_story():
+                continue
             if self.appear(MD.I_CRAFT_TITLE_2026):
                 self.appear_then_click(MD.I_CRAFT_CLOSE_2026, interval=1.5)
-            elif (self.appear(MD.I_CRAFTING_1) or self.appear(MD.I_ENTER2)):
+            elif (self.appear(MD.I_CRAFTING_1) or self.appear(MD.I_ENTER2)
+                  or self.appear(MD.I_FIND_DEMON) or self.appear(MD.I_BATTLE_DEMON)):
                 self.click(BACK, interval=1.5)
             time.sleep(.4)
         raise GameStuckError('库存核对后无法确认返回庭院')
@@ -153,38 +212,72 @@ class ScriptTask(EvoTask):
         values = []
         for _ in range(2):
             self.screenshot()
-            values.append((NICK.ocr(self.device.image) or '').replace(' ', '').strip())
+            values.append(SwitchAccount.verification_name(NICK.ocr(self.device.image)))
             time.sleep(.4)
+        expected = SwitchAccount.verification_name(expected)
         if values != [expected, expected]:
             raise GameStuckError(f'角色身份未确认：期望 {expected}，识别 {values}')
 
     def map_progress(self):
         reads = []
-        for _ in range(3):
+        minimum = getattr(self, '_verified_map_floor', 0)
+        previous = None
+        for _ in range(12):
             self.screenshot()
             if not self.map_visible():
                 raise GameStuckError('未确认探索地图，不能读取掉落进度')
             try:
-                reads.append(read_map_quota(self.device.image))
+                value = read_map_quota(self.device.image)
+                reads.append(value if value[0] >= minimum else None)
             except ProgressUncertain:
                 reads.append(None)
-            if len(reads) >= 2 and reads[-1] is not None and reads[-1] == reads[-2]:
+            if reads[-1] is not None and reads[-1] == previous:
+                self._verified_map_floor = reads[-1][0]
                 return reads[-1][0]
+            if reads[-1] is not None:
+                previous = reads[-1]
             time.sleep(.5)
-        raise GameStuckError(f'裂变之眼掉落进度未能连续两次确认：{reads}')
+        raise GameStuckError(f'裂变之眼掉落进度未能两次有效确认：{reads}')
 
     def enter_fire_one(self):
-        if not self.ui_goto(page_awake_zones):
-            raise GameStuckError('无法进入觉醒之塔')
-        deadline = time.monotonic() + 30
+        self.enter_map()
+        deadline = time.monotonic() + 75
+        fire_entry = RuleImage(roi_front=tuple(self.I_FIRE_KIRIN.roi_front),
+                               roi_back=tuple(self.I_FIRE_KIRIN.roi_back),
+                               method='Template matching', threshold=.7,
+                               file=self.I_FIRE_KIRIN.file)
         while time.monotonic() < deadline:
             self.screenshot()
             if self.appear(self.I_FORM_TEAM) and self.appear(self.I_EVOZONE_FIRE):
                 break
-            self.appear_then_click(self.I_FIRE_KIRIN, interval=2)
+            if self.map_visible():
+                self.appear_then_click(self.I_EXPLORATION_GOTO_AWAKE_ZONE, interval=5)
+                time.sleep(.3)
+                continue
+            self.appear_then_click(fire_entry, interval=5)
             time.sleep(.3)
         else:
             raise GameStuckError('未确认火麒麟挑战界面')
+        layer_roi = (124, 84, 100, 560)
+        layer_reader = RuleOcr(roi=layer_roi, area=layer_roi, mode='Full',
+                               method='Default', keyword='', name='eye_layer_one')
+        position = None
+        for attempt in range(6):
+            self.screenshot()
+            rows = [row for row in layer_reader.detect_and_ocr(self.device.image)
+                    if row.ocr_text.replace(' ', '') in ('壹', '壹层')]
+            if len(rows) == 1:
+                points = rows[0].box
+                position = (int(layer_roi[0] + points[:, 0].mean()),
+                            int(layer_roi[1] + points[:, 1].mean()))
+                break
+            if attempt < 5:
+                self.device.swipe(p1=(164, 180), p2=(164, 580))
+                time.sleep(.8)
+        if position is None:
+            raise GameStuckError('未能在觉醒层数列表找到壹层')
+        self.device.click(x=position[0], y=position[1])
+        time.sleep(.6)
         for _ in range(5):
             self.screenshot()
             if one_selected(self.device.image):
@@ -204,6 +297,19 @@ class ScriptTask(EvoTask):
                 self.click(BACK, interval=1.5)
             time.sleep(.4)
         raise GameStuckError('战斗后未确认返回探索地图')
+
+    def battle_before(self, buff, config, timeout=45):
+        for attempt in range(3):
+            if super().battle_before(buff, config, timeout=timeout / 3):
+                return True
+            self.screenshot()
+            if not (self.appear(self.I_FORM_TEAM) and
+                    self.appear(self.I_EVOZONE_FIRE) and one_selected(self.device.image)):
+                return False
+            if attempt < 2:
+                logger.warning('Challenge did not enter combat; retry %s/2', attempt + 1)
+                self.click(self.I_EVOZONE_FIRE, interval=1)
+        return False
 
     def battle_settlement_requires_confirmation(self):
         return True
@@ -249,8 +355,6 @@ class ScriptTask(EvoTask):
         try:
             accounts = resolve_eye_accounts(self.config.model.eye_awakening)
         except ValueError as error:
-            self.config.model.eye_awakening.scheduler.enable = False
-            self.config.save()
             raise ScriptEnd('小号名单配置不正确：' + str(error)) from error
         today = datetime.now().strftime('%Y-%m-%d')
         directory = Path('log/EyeAwakening') / self.config.config_name
@@ -261,10 +365,9 @@ class ScriptTask(EvoTask):
         state = json.loads(path.read_text(encoding='utf8')) if path.exists() else {
             'date': today, 'server': server_key, 'accounts': {}, 'status': '运行中'}
         if state.get('server') != server_key:
-            self.config.model.eye_awakening.scheduler.enable = False
-            self.config.save()
             raise ScriptEnd('当天记录的服务器与当前配置不符')
         state['status'] = '运行中'
+        state.pop('failure', None)
         current = ''
         stage = '准备'
 
@@ -287,15 +390,26 @@ class ScriptTask(EvoTask):
                         save()
                         logger.warning('%s 上次推送中断，结果未知，不自动重复发送', current)
                     continue
-                if entry.get('battle_pending'):
-                    raise GameStuckError(f'{current} 上次战斗结果未核对，需人工确认现场')
                 stage = '切号及核对身份'
                 if not FindJadeTask.switch_support_account(self, account):
                     raise GameStuckError('切换小号失败')
                 self.verified_identity(current)
                 stage = '读取探索地图进度'
+                self._verified_map_floor = entry.get('progress', 0)
                 self.enter_map()
                 progress = self.map_progress()
+                if entry.get('battle_pending'):
+                    previous_progress = entry.get('progress')
+                    if previous_progress is None or progress < previous_progress:
+                        raise GameStuckError('待核对战斗进度无法安全恢复')
+                    entry.setdefault('recoveries', []).append({
+                        'reason': 'pending_battle_reconciled_from_verified_map',
+                        'previous_progress': previous_progress, 'progress': progress,
+                        'verified_at': datetime.now().isoformat(timespec='seconds'),
+                        'battle_count_added': False})
+                    entry.pop('battle_pending', None)
+                    state['status'] = '运行中'
+                    state.pop('failure', None)
                 entry.update(progress=progress, verified_at=datetime.now().isoformat(timespec='seconds'))
                 save()
                 while progress < 50:
@@ -359,7 +473,8 @@ class ScriptTask(EvoTask):
             save()
             logger.exception(error)
             raise ScriptEnd(f'小号刷裂变之眼停止：{current} {stage}：{error}') from error
-        finally:
-            self.config.model.eye_awakening.scheduler.enable = False
-            self.config.save()
+        # Only successful completion disables the task. Errors keep the
+        # user's enable selection while ScriptEnd stops this worker safely.
+        self.config.model.eye_awakening.scheduler.enable = False
+        self.config.save()
         raise TaskEnd('EyeAwakening')

@@ -342,6 +342,9 @@ class BaseExploration(GameUi, GeneralBattle, GeneralRoom, GeneralInvite, Replace
             cu, res, total = self.O_REALM_RAID_NUMBER1.ocr(self.device.image)
         else:
             cu, res, total = self.O_REALM_RAID_NUMBER.ocr(self.device.image)
+        if total != 30 or not 0 <= cu <= total or cu + res != total:
+            logger.warning(f'Invalid realm raid ticket counter: {cu}/{total}, skip scheduling')
+            return
         # 判断突破票数量
         if cu < con_scrolls.scrolls_threshold:
             return

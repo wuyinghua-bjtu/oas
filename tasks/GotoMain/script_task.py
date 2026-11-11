@@ -13,6 +13,10 @@ import time
 class ScriptTask(GameUi):
 
     def _main_menu_visible(self):
+        from tasks.GameUi.courtyard_templates import CourtyardTemplateAssets
+        if (not self.appear(self.I_CHECK_EXPLORATION)
+                and CourtyardTemplateAssets.menu_visible(self.device.image)):
+            return True
         reader = RuleOcr(roi=(0, 570, 1280, 150), area=(0, 570, 1280, 150),
                          mode='Full', method='Default', keyword='', name='goto_main_menu')
         text = ''.join(str(result.ocr_text) for result in reader.detect_and_ocr(self.device.image))

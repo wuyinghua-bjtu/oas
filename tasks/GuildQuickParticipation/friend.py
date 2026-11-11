@@ -38,6 +38,35 @@ def name_candidates(image, box, name=TARGET):
     return out
 
 
+def panel_name_confirmed(image, box, name=TARGET):
+    """Verify exact panel text; tightly crop detected letters for a second pass."""
+    import cv2
+    reader = RuleOcr(roi=box, area=box, mode="Full", method="Default",
+                     keyword="", name="guild_friend_panel_name")
+    rows = reader.detect_and_ocr(image)
+    if len(rows) != 1:
+        return False
+    row = rows[0]
+    if row.ocr_text.replace(" ", "") == name:
+        return True
+    x, y, w, h = box
+    left, top = row.box.min(axis=0).astype(int)
+    right, bottom = row.box.max(axis=0).astype(int)
+    crop = image[y+max(0,top-2):y+min(h,bottom+2),
+                 x+max(0,left-2):x+min(w,right+2)]
+    if crop.size == 0:
+        return False
+    exact = 0
+    for scale in (1, 2, 3):
+        enlarged = cv2.resize(crop, None, fx=scale, fy=scale,
+                              interpolation=cv2.INTER_CUBIC)
+        text, score = reader.model.ocr_single_line(enlarged)
+        # Require two exact readings; never accept a near name or a suffix.
+        if score >= .5 and text.replace(" ", "") == name:
+            exact += 1
+    return exact >= 2
+
+
 def perform_friend_actions(task, timeout=25):
     """Like and send friendship only to the confirmed main account.
 
@@ -88,7 +117,7 @@ def perform_friend_actions(task, timeout=25):
             if task.appear(notice):
                 task.device.click(1149,91,control_name='guild_close_friend_bond_notice')
                 continue
-            if name_location(task.device.image,panel_box) is not None:
+            if panel_name_confirmed(task.device.image,panel_box):
                 confirmed=True
                 selected_center=center
                 break

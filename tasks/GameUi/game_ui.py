@@ -70,8 +70,15 @@ class GameUi(BaseTask, GameUiAssets):
         """
         self.maybe_screenshot(skip_first_screenshot)
         if page is page_main:
+            from tasks.GameUi.courtyard_templates import CourtyardTemplateAssets
+            if (not self.appear(self.I_CHECK_EXPLORATION)
+                    and CourtyardTemplateAssets.menu_visible(self.device.image)):
+                return True
             from tasks.WantedQuests.assets import WantedQuestsAssets
-            if (self.appear(self.I_MAIN_GOTO_SHIKIGAMI_RECORDS)
+            # 探索页同样带「悬赏封印」侧栏，若只靠 式神录按钮+悬赏封印 判定会把探索页误判成庭院，
+            # 这里先用探索页锚点排除（底栏「妖气探索」白字），避免 ui_goto 在探索页上原地打转。
+            if (not self.appear(self.I_CHECK_EXPLORATION)
+                    and self.appear(self.I_MAIN_GOTO_SHIKIGAMI_RECORDS)
                     and self.appear(WantedQuestsAssets.I_WQ_SEAL)):
                 return True
         if isinstance(page.check_button, list):

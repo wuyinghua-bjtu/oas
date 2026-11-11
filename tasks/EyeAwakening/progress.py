@@ -1,6 +1,7 @@
 """Read the battle-drop quota, without confusing it with purchase quotas."""
 
 import re
+import cv2
 
 from module.atom.ocr import RuleOcr
 from module.atom.image import RuleImage
@@ -19,15 +20,44 @@ def read_map_quota(image) -> tuple[int, int]:
     """Read the icon and unambiguous counter shown on the exploration map."""
     if not MAP_EYE.match(image):
         raise ProgressUncertain('探索界面未识别裂变之眼图标')
-    box = (934, 10, 88, 41)
-    text = RuleOcr(roi=box, area=box, mode='Single', method='Default',
-                   keyword='', name='eye_map_quota').ocr(image) or ''
+    box = (925, 0, 115, 60)
+    reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                     keyword='', name='eye_map_quota')
+    rows = reader.detect_and_ocr(image)
+    candidates = [row.ocr_text for row in rows
+                  if re.fullmatch(r'\s*\d{1,2}\s*/\s*\d{1,2}\s*', row.ocr_text)]
+    if len(candidates) != 1:
+        raise ProgressUncertain('探索界面掉落进度无法唯一识别')
+    text = candidates[0]
     match = re.fullmatch(r'\s*(\d{1,2})\s*/\s*(\d{1,2})\s*', text)
     if not match:
         raise ProgressUncertain(f'探索界面掉落进度无法识别：{text}')
     current, total = map(int, match.groups())
     if total != 50 or not 0 <= current <= total:
         raise ProgressUncertain(f'探索界面掉落进度不合理：{text}')
+    # This font's 7 is repeatedly read as 1, even on consecutive frames.
+    # Cross-check only the positively identified activity tracker, enlarged
+    # and contrast-adjusted; unrelated counters must never repair the quota.
+    crop = image[200:320, 1000:1279, :3]
+    if crop.size:
+        crop = cv2.resize(crop, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
+        crop = cv2.convertScaleAbs(crop, alpha=1.5, beta=-60)
+        roi = (0, 0, crop.shape[1], crop.shape[0])
+        tracker = RuleOcr(roi=roi, area=roi, mode='Full', method='Default',
+                          keyword='', name='eye_map_tracker_quota')
+        text = ''.join(row.ocr_text for row in tracker.detect_and_ocr(crop))
+        text = re.sub(r'\s+', '', text).replace('（', '(').replace('）', ')')
+        if all(word in text for word in ('活动', '探索', '觉醒', '御魂', '契灵', '副本', '掉落')):
+            matches = re.findall(r'掉落\(([0-9]{1,2})/50', text)
+            if len(matches) == 1:
+                sidebar = int(matches[0])
+                if not 0 <= sidebar <= 50:
+                    raise ProgressUncertain('活动追踪掉落进度超出范围')
+                if sidebar != current:
+                    if current == 1 and sidebar == 7:
+                        current = sidebar
+                    else:
+                        raise ProgressUncertain(f'地图与活动追踪进度不一致：{current}/{sidebar}')
     return current, total
 
 

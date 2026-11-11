@@ -65,7 +65,16 @@ def finish_account(task, name, data, entry, save):
    time.sleep(1)
  else:
   raise GameStuckError('庭院寮入口未显示，无法安全继续')
- snap();observed=rule((125,25,150,32),'Single').ocr(d.image).strip().replace(' ','');assert observed==name, '角色名不匹配'
+ from tasks.Component.SwitchAccount.switch_account import SwitchAccount
+ observed = ''
+ for _ in range(3):
+  snap()
+  observed = SwitchAccount.verification_name(rule((125,25,120,32),'Single').ocr(d.image))
+  if observed == SwitchAccount.verification_name(name):
+   break
+  time.sleep(.3)
+ else:
+  raise GameStuckError(f'角色名不匹配：预期 {name}，识别 {observed}')
  balance=read_jade_balance();entry['jade_before']=balance;save();print('JADE',balance,flush=True)
  if not entry.get('guild_tasks'):
   click(580,644,'guild_open',3)

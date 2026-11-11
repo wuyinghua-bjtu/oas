@@ -12,6 +12,57 @@ from tasks.EyeAwakening.script_task import ScriptTask
 from tasks.EyeAwakening.inventory import InventoryUncertain, combine_boundaries, read_inventory_frame
 from tasks.EyeAwakening.notification import notify_completion
 from tasks.EyeAwakening.profile import PROFILES
+from tasks.EyeAwakening.progress import ProgressUncertain, read_map_quota
+
+
+class MapQuotaTest(unittest.TestCase):
+    def read(self, top, tracker):
+        image = np.zeros((720, 1280, 3), dtype=np.uint8)
+        rows = [[NS(ocr_text=top)], [NS(ocr_text=tracker)]]
+        with patch('tasks.EyeAwakening.progress.MAP_EYE.match', return_value=True), \
+                patch('tasks.EyeAwakening.progress.RuleOcr.detect_and_ocr', side_effect=rows):
+            return read_map_quota(image)
+
+    def test_font_seven_verified_by_activity_tracker(self):
+        self.assertEqual(self.read('1/50', '活动 探索觉醒御魂契灵副本掉落（7/50）'), (7, 50))
+
+    def test_unrelated_counter_cannot_correct_progress(self):
+        self.assertEqual(self.read('1/50', '御魂今日掉落（7/50）'), (1, 50))
+
+    def test_other_conflicts_remain_uncertain(self):
+        with self.assertRaises(ProgressUncertain):
+            self.read('6/50', '活动 探索觉醒御魂契灵副本掉落（7/50）')
+
+
+class MapProgressRetryTest(unittest.TestCase):
+    def setUp(self):
+        self.task = object.__new__(ScriptTask)
+        self.task.device = NS(image=object())
+
+    def read(self, values, minimum=0):
+        self.task._verified_map_floor = minimum
+        with patch.object(self.task, 'screenshot'), \
+                patch.object(self.task, 'map_visible', return_value=True), \
+                patch('tasks.EyeAwakening.script_task.read_map_quota', side_effect=values), \
+                patch('tasks.EyeAwakening.script_task.time.sleep'):
+            return self.task.map_progress()
+
+    def test_transient_ocr_recovers_after_original_three_attempts(self):
+        self.assertEqual(self.read([(1, 50), (7, 50), (1, 50), (7, 50), (7, 50)], 7), 7)
+
+    def test_consecutive_regression_is_not_accepted(self):
+        self.assertEqual(self.read([(1, 50), (1, 50), (7, 50), (7, 50)], 7), 7)
+
+    def test_discarded_regression_does_not_reset_valid_confirmation(self):
+        self.assertEqual(self.read([(7, 50), (1, 50), (7, 50)], 7), 7)
+
+    def test_retry_remains_bounded(self):
+        with self.assertRaises(GameStuckError):
+            self.read([(1, 50)] * 12, 7)
+
+    def test_verified_progress_updates_floor(self):
+        self.assertEqual(self.read([(8, 50), (8, 50)], 7), 8)
+        self.assertEqual(self.task._verified_map_floor, 8)
 
 
 class EyeFlowTest(unittest.TestCase):
@@ -83,6 +134,43 @@ class EyeFlowTest(unittest.TestCase):
         self.assertEqual(state['accounts']['小号一']['progress'], 1)
         self.assertFalse(state['accounts']['小号一'].get('completed', False))
         self.assertNotIn('小号二', state['accounts'])
+        self.assertTrue(self.config.model.eye_awakening.scheduler.enable)
+
+    def test_invalid_accounts_preserve_enable_selection(self):
+        with patch('tasks.EyeAwakening.script_task.resolve_eye_accounts',
+                   side_effect=ValueError('invalid accounts')):
+            with self.assertRaises(ScriptEnd):
+                self.task.run()
+        self.assertTrue(self.config.model.eye_awakening.scheduler.enable)
+
+    def test_server_mismatch_preserves_enable_selection(self):
+        self.task.map_progress = lambda: 50
+        with self.assertRaises(TaskEnd):
+            self.task.run()
+        self.config.model.eye_awakening.scheduler.enable = True
+        self.a.svr = self.b.svr = '另一测试服'
+        with self.assertRaises(ScriptEnd):
+            self.task.run()
+        self.assertTrue(self.config.model.eye_awakening.scheduler.enable)
+
+    def test_pending_recovery_reads_verified_map_without_adding_battle(self):
+        directory = Path('log/EyeAwakening/oas_leveling')
+        directory.mkdir(parents=True)
+        from datetime import datetime
+        today = datetime.now().strftime('%Y-%m-%d')
+        state = {'date': today, 'server': '测试服', 'status': '出错',
+                 'accounts': {'小号一': {'battles': 4, 'progress': 49,
+                                          'battle_pending': True}}}
+        (directory / (today + '.json')).write_text(
+            json.dumps(state, ensure_ascii=False), encoding='utf8')
+        self.task.map_progress = lambda: 50
+        with self.assertRaises(TaskEnd):
+            self.task.run()
+        entry = self.ledger()['accounts']['小号一']
+        self.assertEqual(entry['battles'], 4)
+        self.assertEqual(entry['progress'], 50)
+        self.assertNotIn('battle_pending', entry)
+        self.assertFalse(entry['recoveries'][0]['battle_count_added'])
 
     def test_victory_without_drop_does_not_finish_account(self):
         values = iter([49, 49, 50, 50])
@@ -115,6 +203,38 @@ class EyeFlowTest(unittest.TestCase):
                 self.task.run()
         self.assertEqual(push.call_count, 0)
         self.assertEqual(self.ledger()['accounts']['小号一']['notification']['status'], 'uncertain')
+
+
+class ActivityStoryRecoveryTest(unittest.TestCase):
+    def setUp(self):
+        self.task = object.__new__(ScriptTask)
+        self.task.device = NS(image=np.zeros((720, 1280, 3), dtype=np.uint8))
+
+    def test_exact_toolbar_skip_click_uses_ocr_position(self):
+        row = NS(ocr_text='跳过', box=np.array([[90, 20], [140, 20], [140, 48], [90, 48]]))
+        with patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+             patch.object(self.task, 'click', return_value=True) as click:
+            reader.return_value.detect_and_ocr.return_value = [row]
+            self.assertTrue(self.task.dismiss_activity_story())
+        button = click.call_args.args[0]
+        self.assertEqual(button.roi_front, (1210, 20, 50, 28))
+        self.assertEqual(click.call_args.kwargs['interval'], 1.5)
+
+    def test_unrelated_or_ambiguous_text_does_not_click(self):
+        row = NS(ocr_text='跳过', box=np.array([[90, 20], [140, 20], [140, 48], [90, 48]]))
+        for rows in ([], [NS(ocr_text='跳过剧情')], [row, row]):
+            with patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+                 patch.object(self.task, 'click') as click:
+                reader.return_value.detect_and_ocr.return_value = rows
+                self.assertFalse(self.task.dismiss_activity_story())
+                click.assert_not_called()
+
+    def test_inventory_return_skips_story_then_confirms_courtyard(self):
+        with patch.object(self.task, 'screenshot'), \
+             patch.object(self.task, 'appear', side_effect=[False, True]), \
+             patch.object(self.task, 'dismiss_activity_story', return_value=True) as skip:
+            self.task.leave_inventory()
+        skip.assert_called_once()
 
 
 class InventoryAndNotificationTest(unittest.TestCase):

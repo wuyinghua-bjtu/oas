@@ -53,6 +53,40 @@ class ScriptRecoveryTests(unittest.TestCase):
         runner.device.screenshot.assert_not_called()
 
 
+class SchedulerCompletionTests(unittest.TestCase):
+    def runner(self, waiting):
+        runner = object.__new__(Script)
+        runner.config_name = 'test'
+        runner.config = Mock()
+        runner.config.script.device.run_background_only = True
+        runner.config.pending_task = []
+        runner.config.waiting_task = waiting
+        runner.device = Mock()
+        runner._emulator_down = False
+        runner.is_first_task = False
+        runner.failure_record = {}
+        runner.get_next_task = Mock(side_effect=['EyeAwakening', RuntimeError('next task requested')])
+        runner.run = Mock(return_value=True)
+        return runner
+
+    @patch('script.logger.set_file_logger')
+    @patch('script.del_cached_property')
+    def test_completed_last_task_stops_without_requesting_another(self, cache, logging):
+        runner = self.runner([])
+        runner.loop()
+        runner.get_next_task.assert_called_once_with()
+        runner.config.update_scheduler.assert_called_once_with()
+        runner.device.app_stop.assert_not_called()
+
+    @patch('script.logger.set_file_logger')
+    @patch('script.del_cached_property')
+    def test_future_tasks_keep_scheduler_running(self, cache, logging):
+        runner = self.runner([object()])
+        with self.assertRaisesRegex(RuntimeError, 'next task requested'):
+            runner.loop()
+        self.assertEqual(runner.get_next_task.call_count, 2)
+
+
 class ScriptDeviceRoutingTests(unittest.TestCase):
     def runner(self, enabled=False, active=False):
         runner = object.__new__(Script)

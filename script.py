@@ -831,6 +831,10 @@ class Script:
                 self.__dict__.get('_task_failures', {}).pop(task, None)
                 self.__dict__.get('_failure_images', {}).pop(task, None)
                 del_cached_property(self, 'config')
+                self.config.update_scheduler()
+                if not self.config.pending_task and not self.config.waiting_task:
+                    logger.info('All scheduled tasks finished; scheduler stopped normally')
+                    break
                 continue
             elif self.config.script.error.handle_error:
                 # self.config.task_delay(success=False)
