@@ -228,9 +228,9 @@ class ScriptTask(ExplorationTask):
             self.screenshot()
             previous_character = self.state.get('character')
             previous_entry = self.state['accounts'].get(previous_character, {})
-            if self.state.get('failure', {}).get('reason') == 'Wait too long' and not previous_entry.get('battle_pending'):
+            if self.state.get('failure') and not previous_entry.get('battle_pending'):
                 try:
-                    GotoMainTask.run(self)
+                    GotoMainTask(self.config, self.device).run()
                 except TaskEnd:
                     pass
                 self.screenshot()
