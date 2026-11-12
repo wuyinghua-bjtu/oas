@@ -16,6 +16,10 @@ from tasks.Component.SwitchAccount.switch_account import SwitchAccount
 from tasks.GameUi.page import page_exploration, page_main
 from tasks.GotoMain.script_task import ScriptTask as GotoMainTask
 from module.atom.ocr import RuleOcr
+from module.atom.click import RuleClick
+
+REWARD_CONTINUE = RuleClick(roi_front=(620, 520, 40, 30), roi_back=(620, 520, 40, 30),
+                            name='eye_reward_continue')
 
 
 def save_progress(path, state):
@@ -117,7 +121,7 @@ class ScriptTask(ExplorationTask):
                     self.progress_current = verified
                     self.entry['observed_reward_progress'] = verified
                     self.save_state()
-                    self.click(self.C_REWARD_1, interval=1)
+                    self.click(REWARD_CONTINUE, interval=1.5)
                 previous = current
             elif self.appear(self.I_WIN) or self.appear(self.I_DE_WIN):
                 self.click(self.C_WIN_1, interval=1)
