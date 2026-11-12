@@ -232,7 +232,7 @@ class ScriptTask(ExplorationTask):
             self.screenshot()
             previous_character = self.state.get('character')
             previous_entry = self.state['accounts'].get(previous_character, {})
-            if self.state.get('failure') and not previous_entry.get('battle_pending'):
+            if (self.state.get('failure') or self.state.get('status') == '等待个人突破后继续') and not previous_entry.get('battle_pending'):
                 if self.appear(self.I_E_EXIT_CONFIRM) or self.get_current_scene() == Scene.MAIN:
                     self.quit_explore()
                 try:
