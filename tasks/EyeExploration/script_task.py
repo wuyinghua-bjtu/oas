@@ -240,6 +240,12 @@ class ScriptTask(ExplorationTask):
                 except TaskEnd:
                     pass
                 self.screenshot()
+                if self.appear(self.I_E_EXIT_CONFIRM) or self.get_current_scene() == Scene.MAIN:
+                    self.quit_explore()
+                    self.ui_current = page_exploration
+                    if not self.ui_goto(page_main):
+                        raise GameStuckError('退出探索后无法核对庭院')
+                    self.screenshot()
             if previous_entry.get('battle_pending') and not self.appear(self.I_CHECK_MAIN):
                 try:
                     read_drop_popup_quota(self.device.image)
