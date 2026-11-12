@@ -17,7 +17,7 @@ from tasks.Component.GeneralBattle.config_general_battle import GeneralBattleCon
 from tasks.Component.GeneralInvite.general_invite import GeneralInvite
 from tasks.Component.SwitchSoul.switch_soul import SwitchSoul
 from tasks.Hunt.assets import HuntAssets
-from tasks.GuildQuickParticipation.kirin import open_guild, GUILD_HUNT, GUILD_TASK, COURTYARD_GUILD, HUNT_TITLE
+from tasks.GuildQuickParticipation.kirin import open_guild, open_hunt_entry, GUILD_TASK, COURTYARD_GUILD, HUNT_TITLE
 from tasks.GuildQuickParticipation.netherworld import wait_step, open_activity, click
 
 
@@ -47,13 +47,8 @@ class ScriptTask(GameUi, GeneralBattle, GeneralInvite, SwitchSoul, HuntAssets):
         try:
             if self.kirin_day:
                 open_guild(self)
-                def open_kirin():
-                    if not self.appear(GUILD_HUNT):
-                        return False
-                    x, y, w, h = GUILD_HUNT.roi_front
-                    self.device.click(210, y + h // 2 + 30, control_name='hunt_guild_open_kirin')
-                    return True
-                wait_step(self, '从阴阳寮进入狩猎战', lambda: self.appear(HUNT_TITLE), open_kirin)
+                wait_step(self, '从阴阳寮进入狩猎战', lambda: self.appear(HUNT_TITLE),
+                          lambda: open_hunt_entry(self))
             else:
                 # Weekend guild sidebar has 阴界之门, not 狩猎战.
                 wait_step(self, '进入阴阳寮', lambda: self.appear(GUILD_TASK),

@@ -87,19 +87,22 @@ def open_guild(task, timeout=30):
     raise GameStuckError('未确认阴阳寮神社活动入口（已有限重试）')
 
 
+def open_hunt_entry(task):
+    if guild_activity_board(task):
+        task.device.click(260,500,control_name='guild_open_hunting_board')
+        return True
+    if task.appear(GUILD_HUNT):
+        x,y,w,h=GUILD_HUNT.roi_front
+        task.device.click(210,y+h//2+30,control_name='guild_open_hunting')
+        return True
+    return False
+
+
 def kirin_and_reward(task, claim=True):
     """Enter and exit while preparing, then claim the ten guild-task rewards."""
     open_guild(task)
-    def open_hunt():
-        if guild_activity_board(task):
-            task.device.click(260,500,control_name='guild_open_hunting_board')
-            return True
-        if task.appear(GUILD_HUNT):
-            x,y,w,h=GUILD_HUNT.roi_front
-            task.device.click(210,y+h//2+30,control_name='guild_open_hunting')
-            return True
-        return False
-    _transition(task,lambda:task.appear(HUNT_TITLE) and task.appear(CHALLENGE),open_hunt)
+    _transition(task,lambda:task.appear(HUNT_TITLE) and task.appear(CHALLENGE),
+                lambda:open_hunt_entry(task))
     def challenge():
         if task.appear(CHALLENGE):
             task.device.click(1180,625,control_name='guild_hunt_challenge')
