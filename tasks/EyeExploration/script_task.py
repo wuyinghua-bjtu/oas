@@ -15,6 +15,7 @@ from tasks.Exploration.solo import ScriptTask as ExplorationTask
 from tasks.Component.SwitchAccount.switch_account import SwitchAccount
 from tasks.GameUi.page import page_exploration, page_main
 from tasks.GotoMain.script_task import ScriptTask as GotoMainTask
+from module.atom.ocr import RuleOcr
 
 
 def save_progress(path, state):
@@ -53,6 +54,25 @@ class ScriptTask(ExplorationTask):
 
     def map_visible(self):
         return MAP_EYE.match(self.device.image) and self.appear(self.I_EXPLORATION_GOTO_AWAKE_ZONE)
+
+    def screenshot(self):
+        super().screenshot()
+        if time.monotonic() - getattr(self, '_audio_checked_at', 0) < 3:
+            return
+        self._audio_checked_at = time.monotonic()
+        box = (400, 170, 480, 350)
+        reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                         keyword='', name='eye_optional_audio')
+        rows = reader.detect_and_ocr(self.device.image)
+        text = ''.join(row.ocr_text for row in rows)
+        cancel = [row for row in rows if row.ocr_text.strip() == '取消']
+        if '式神音频' in text and '后台下载' in text and len(cancel) == 1:
+            points = cancel[0].box
+            self.device.click(int(box[0] + points[:, 0].mean()),
+                              int(box[1] + points[:, 1].mean()),
+                              control_name='EYE_OPTIONAL_AUDIO_CANCEL')
+            time.sleep(.5)
+            super().screenshot()
 
     def ui_page_appear(self, page, skip_first_screenshot=True, interval=None):
         if page is page_exploration:
@@ -208,6 +228,12 @@ class ScriptTask(ExplorationTask):
             self.screenshot()
             previous_character = self.state.get('character')
             previous_entry = self.state['accounts'].get(previous_character, {})
+            if self.state.get('failure', {}).get('reason') == 'Wait too long' and not previous_entry.get('battle_pending'):
+                try:
+                    GotoMainTask.run(self)
+                except TaskEnd:
+                    pass
+                self.screenshot()
             if previous_entry.get('battle_pending') and not self.appear(self.I_CHECK_MAIN):
                 try:
                     read_drop_popup_quota(self.device.image)
