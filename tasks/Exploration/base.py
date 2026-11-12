@@ -334,7 +334,7 @@ class BaseExploration(GameUi, GeneralBattle, GeneralRoom, GeneralInvite, Replace
             
         return None
 
-    def activate_realm_raid(self, con_scrolls, con) -> None:
+    def activate_realm_raid(self, con_scrolls, con, resume_task='Exploration', submit_scrolls=True) -> None:
         # 判断是否开启突破票检测
         if not con_scrolls.scrolls_enable:
             return
@@ -368,9 +368,11 @@ class BaseExploration(GameUi, GeneralBattle, GeneralRoom, GeneralInvite, Replace
         # 设置下次执行行时间
         logger.info("RealmRaid and Exploration  set_next_run !")
         next_run = datetime.now() + con_scrolls.scrolls_cd
-        self.set_next_run(task='Exploration', success=False, finish=False, target=next_run)
+        self.set_next_run(task=resume_task, success=False, finish=False,
+                          server=resume_task == 'Exploration', target=next_run)
         self.set_next_run(task='RealmRaid', success=False, finish=False, server=False, target=datetime.now())
-        self.set_next_run(task='MemoryScrolls', success=False, finish=False, target=datetime.now())
+        if submit_scrolls:
+            self.set_next_run(task='MemoryScrolls', success=False, finish=False, target=datetime.now())
         raise TaskEnd
 
     #

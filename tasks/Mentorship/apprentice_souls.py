@@ -194,8 +194,6 @@ def run_apprentice_souls(config, device, rounds=15, day=None, character=local_te
             exhausted_frames = 0
             drag_attempts = 0
             next_drag = 0.0
-            panel_attempts = iter(((640, 430), (460, 500), (805, 500), (640, 570), (460, 430)))
-            next_panel_click = 0.0
             while time.monotonic() < deadline:
                 device.screenshot()
                 if task.is_in_real_battle(False) or task.battle_result_visible():
@@ -204,13 +202,6 @@ def run_apprentice_souls(config, device, rounds=15, day=None, character=local_te
                     raise RuntimeError('协战检查前已进入战斗，进度标记为待核对')
                 if task.I_PREPARE_HIGHLIGHT.match(device.image):
                     assist_state, card = _assist_card(device.image)
-                    if assist_state is None and time.monotonic() >= next_panel_click:
-                        position = next(panel_attempts, None)
-                        if position is not None:
-                            device.click(*position, control_name='mentorship_open_lineup')
-                            next_panel_click = time.monotonic() + 1
-                            time.sleep(.8)
-                            continue
                     if assist_state == 'deployed':
                         assist_verified = True
                         break

@@ -3,7 +3,6 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
 
 import numpy as np
 from module.atom.click import RuleClick
@@ -22,6 +21,7 @@ from tasks.EyeAwakening.profile import PROFILES, validate_profile
 from tasks.FindJade.script_task import ScriptTask as FindJadeTask
 from tasks.GameUi.page import page_awake_zones, page_exploration, page_main
 from tasks.EyeAwakening.config import resolve_eye_accounts
+from tasks.GroupedAwakening.ledger import atomic_json_write
 from tasks.MetaDemon.assets import MetaDemonAssets as MD
 
 
@@ -45,6 +45,14 @@ def one_selected(image):
 
 
 class ScriptTask(EvoTask):
+    def connection_pending(self):
+        box = (420, 240, 440, 240)
+        reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                         keyword='', name='eye_connection_wait')
+        return any(any(label in row.ocr_text.replace(' ', '')
+                       for label in ('正在连接', '连接中'))
+                   for row in reader.detect_and_ocr(self.device.image))
+
     def dismiss_activity_story(self):
         # Only an exact skip label in the story toolbar permits this click.
         box = (1120, 0, 160, 85)
@@ -248,6 +256,9 @@ class ScriptTask(EvoTask):
                                file=self.I_FIRE_KIRIN.file)
         while time.monotonic() < deadline:
             self.screenshot()
+            if self.connection_pending():
+                time.sleep(1)
+                continue
             if self.appear(self.I_FORM_TEAM) and self.appear(self.I_EVOZONE_FIRE):
                 break
             if self.map_visible():
@@ -278,23 +289,38 @@ class ScriptTask(EvoTask):
             raise GameStuckError('未能在觉醒层数列表找到壹层')
         self.device.click(x=position[0], y=position[1])
         time.sleep(.6)
-        for _ in range(5):
+        deadline = time.monotonic() + 90
+        attempts = 0
+        while time.monotonic() < deadline:
             self.screenshot()
+            if self.connection_pending():
+                time.sleep(1)
+                continue
             if one_selected(self.device.image):
                 return
-            self.click(ONE_CLICK, interval=.8)
+            if attempts >= 5:
+                break
+            if self.click(ONE_CLICK, interval=.8):
+                attempts += 1
             time.sleep(.6)
         raise GameStuckError('未确认火麒麟一层已选中')
 
     def return_to_map(self):
-        deadline = time.monotonic() + 35
+        deadline = time.monotonic() + 90
+        attempts = 0
         while time.monotonic() < deadline:
             self.screenshot()
+            if self.connection_pending():
+                time.sleep(1)
+                continue
             if self.map_visible():
                 self.ui_current = page_exploration
                 return
             if self.appear(self.I_FORM_TEAM) or self.appear(self.I_CHECK_AWAKE):
-                self.click(BACK, interval=1.5)
+                if attempts >= 4:
+                    raise GameStuckError('返回探索地图无响应，已停止重复点击')
+                if self.click(BACK, interval=3):
+                    attempts += 1
             time.sleep(.4)
         raise GameStuckError('战斗后未确认返回探索地图')
 
@@ -373,9 +399,7 @@ class ScriptTask(EvoTask):
 
         def save():
             state['updated_at'] = datetime.now().isoformat(timespec='seconds')
-            tmp = path.with_name(path.name + '.' + uuid4().hex + '.tmp')
-            tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf8')
-            tmp.replace(path)
+            atomic_json_write(path, state)
 
         try:
             for account in accounts:

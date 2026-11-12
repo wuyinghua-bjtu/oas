@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 from tasks.Exploration.base import BaseExploration
+from module.exception import TaskEnd
 
 
 class ExplorationRaidCounterTest(unittest.TestCase):
@@ -33,6 +34,34 @@ class ExplorationRaidCounterTest(unittest.TestCase):
                 self.task.O_REALM_RAID_NUMBER1.ocr.return_value = (current, 30 - current, 30)
                 with self.assertRaisesRegex(RuntimeError, 'raid scheduling reached'):
                     self.task.activate_realm_raid(self.scrolls, SimpleNamespace())
+
+    def test_eye_resume_without_scroll_submission(self):
+        self.task.ui_goto = Mock()
+        self.task.set_next_run = Mock()
+        self.task.O_REALM_RAID_NUMBER1.ocr.return_value = (25, 5, 30)
+        from datetime import timedelta
+        self.scrolls.scrolls_cd = timedelta(minutes=30)
+        options = SimpleNamespace(buff_gold_50_click=False, buff_gold_100_click=False,
+                                  buff_exp_50_click=False, buff_exp_100_click=False)
+        with self.assertRaises(TaskEnd):
+            self.task.activate_realm_raid(self.scrolls, options,
+                                         resume_task='EyeExploration', submit_scrolls=False)
+        calls = self.task.set_next_run.call_args_list
+        self.assertEqual([call.kwargs['task'] for call in calls], ['EyeExploration', 'RealmRaid'])
+        self.assertFalse(calls[0].kwargs['server'])
+
+    def test_ordinary_exploration_still_submits_scrolls(self):
+        self.task.ui_goto = Mock()
+        self.task.set_next_run = Mock()
+        self.task.O_REALM_RAID_NUMBER1.ocr.return_value = (25, 5, 30)
+        from datetime import timedelta
+        self.scrolls.scrolls_cd = timedelta(minutes=30)
+        options = SimpleNamespace(buff_gold_50_click=False, buff_gold_100_click=False,
+                                  buff_exp_50_click=False, buff_exp_100_click=False)
+        with self.assertRaises(TaskEnd):
+            self.task.activate_realm_raid(self.scrolls, options)
+        self.assertEqual([call.kwargs['task'] for call in self.task.set_next_run.call_args_list],
+                         ['Exploration', 'RealmRaid', 'MemoryScrolls'])
 
 
 if __name__ == '__main__':

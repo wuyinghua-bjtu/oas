@@ -237,6 +237,60 @@ class ActivityStoryRecoveryTest(unittest.TestCase):
         skip.assert_called_once()
 
 
+class FireOneConnectionTest(unittest.TestCase):
+    def test_selected_layer_waits_for_connection_without_retry_clicks(self):
+        task = object.__new__(ScriptTask)
+        task.device = NS(image=object(), click=lambda **kwargs: None)
+        rows = [NS(ocr_text='壹层', box=np.array([[0, 0], [20, 20]]))]
+        with patch.object(task, 'enter_map'), \
+             patch.object(task, 'screenshot'), \
+             patch.object(task, 'appear', return_value=True), \
+             patch.object(task, 'connection_pending', side_effect=[False, True, True, False]), \
+             patch.object(task, 'click') as click, \
+             patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+             patch('tasks.EyeAwakening.script_task.one_selected', return_value=True), \
+             patch('tasks.EyeAwakening.script_task.time.sleep'):
+            reader.return_value.detect_and_ocr.return_value = rows
+            task.enter_fire_one()
+        click.assert_not_called()
+
+    def test_connection_labels(self):
+        task = object.__new__(ScriptTask)
+        task.device = NS(image=object())
+        for text, expected in (('连接中......', True), ('正在连接：', True), ('挑战', False)):
+            with self.subTest(text=text), patch('tasks.EyeAwakening.script_task.RuleOcr') as reader:
+                reader.return_value.detect_and_ocr.return_value = [NS(ocr_text=text)]
+                self.assertEqual(task.connection_pending(), expected)
+
+
+class ReturnToMapTest(unittest.TestCase):
+    def setUp(self):
+        self.task = object.__new__(ScriptTask)
+        self.task.device = NS(image=object())
+
+    def test_connecting_overlay_prevents_back_click(self):
+        with patch.object(self.task, 'screenshot'), \
+             patch.object(self.task, 'map_visible', return_value=True), \
+             patch.object(self.task, 'click') as click, \
+             patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+             patch('tasks.EyeAwakening.script_task.time.sleep'):
+            reader.return_value.detect_and_ocr.side_effect = [[NS(ocr_text='正在连接')], []]
+            self.task.return_to_map()
+        click.assert_not_called()
+
+    def test_unresponsive_back_is_bounded(self):
+        with patch.object(self.task, 'screenshot'), \
+             patch.object(self.task, 'map_visible', return_value=False), \
+             patch.object(self.task, 'appear', return_value=True), \
+             patch.object(self.task, 'click', return_value=True) as click, \
+             patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+             patch('tasks.EyeAwakening.script_task.time.sleep'):
+            reader.return_value.detect_and_ocr.return_value = []
+            with self.assertRaises(GameStuckError):
+                self.task.return_to_map()
+        self.assertEqual(click.call_count, 4)
+
+
 class InventoryAndNotificationTest(unittest.TestCase):
     def test_three_profiles_have_disjoint_accounts_and_devices(self):
         groups = list(PROFILES.values())

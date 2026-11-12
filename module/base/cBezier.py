@@ -121,6 +121,14 @@ class BezierTrajectory:
         :param yhh:在终点来回摆动的范围
         :return:返回一个字典trackArray对应轨迹数组，P对应贝塞尔曲线的影响点
         '''
+        if start[0] == end[0]:
+            if start[1] == end[1]:
+                return [list(start), list(end)]
+            swapped = cls.trackArray(
+                start=[start[1], start[0]], end=[end[1], end[0]],
+                numberList=numberList, le=le, deviation=deviation,
+                bias=bias, type=type, cbb=cbb, yhh=yhh)
+            return [[point[1], point[0]] for point in swapped]
         s = []
         fun = cls.simulation(start, end, le, deviation, bias)
         w = fun['P']

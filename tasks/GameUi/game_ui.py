@@ -23,7 +23,7 @@ from module.exception import (GameNotRunningError, GamePageUnknownError,
 from module.logger import logger
 from tasks.Component.GeneralBattle.assets import GeneralBattleAssets
 from tasks.GameUi.assets import GameUiAssets
-from tasks.GameUi.page import Page, PageRegistry, page_login, page_main, random_click
+from tasks.GameUi.page import Page, PageRegistry, page_login, page_main, page_exploration, random_click
 from tasks.Restart.assets import RestartAssets
 from tasks.SixRealms.assets import SixRealmsAssets
 from tasks.base_task import BaseTask
@@ -301,6 +301,29 @@ class GameUi(BaseTask, GameUiAssets):
                 return True
         return False
 
+    def _click_exploration_label(self):
+        from tasks.GameUi.courtyard_templates import CourtyardTemplateAssets
+        self.device.screenshot()
+        image = self.device.image
+        if (self.I_CHECK_EXPLORATION.match(image)
+                or not (self.I_CHECK_MAIN.match(image)
+                        or CourtyardTemplateAssets.menu_visible(image))):
+            return False
+        reader = RuleOcr(roi=(243, 100, 933, 211), area=(243, 100, 933, 211),
+                         mode='Full', method='Default', keyword='',
+                         name='courtyard_exploration_label')
+        matches = [item for item in reader.detect_and_ocr(image)
+                   if ''.join(item.ocr_text.split()) == '探索']
+        if len(matches) != 1:
+            return False
+        points = matches[0].box
+        x = 243 + int(sum(point[0] for point in points) / len(points))
+        y = 100 + int(sum(point[1] for point in points) / len(points))
+        if not (243 <= x < 1176 and 100 <= y < 311):
+            return False
+        self.device.click(x, y, control_name='courtyard_exploration_label')
+        return True
+
     def _execute_path(self, path: list, timeout_timer):
         """
         执行路径
@@ -339,6 +362,9 @@ class GameUi(BaseTask, GameUiAssets):
                     if exec_operates[0]:  # 只要第一个成功就跳出
                         break
                 if self.appear_then_operate(button, interval=0.8, skip_first_screenshot=False):
+                    break
+                if (current_page is page_main and next_page is page_exploration
+                        and self._click_exploration_label()):
                     break
             else:
                 logger.warning(f'Failed recognize {button} on {current_page}')

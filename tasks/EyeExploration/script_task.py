@@ -12,7 +12,22 @@ from tasks.EyeAwakening.script_task import NICK, ScriptTask as EyeAwakeningTask
 from tasks.EyeExploration.progress import read_reward_quota
 from tasks.Exploration.base import Scene
 from tasks.Exploration.solo import ScriptTask as ExplorationTask
+from tasks.Component.SwitchAccount.switch_account import SwitchAccount
 from tasks.GameUi.page import page_exploration, page_main
+
+
+def save_progress(path, state):
+    state['updated_at'] = datetime.now().isoformat(timespec='seconds')
+    temporary = path.with_name(path.name + '.' + uuid4().hex + '.tmp')
+    temporary.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf8')
+    for attempt in range(6):
+        try:
+            temporary.replace(path)
+            return
+        except PermissionError as error:
+            if getattr(error, 'winerror', None) not in (5, 32, 33) or attempt == 5:
+                raise
+            time.sleep(.2 * (attempt + 1))
 
 
 class ScriptTask(ExplorationTask):
@@ -114,7 +129,17 @@ class ScriptTask(ExplorationTask):
         if datetime.now() - self.start_time >= self.limit_time:
             self.stop_reason = '时间上限'
             return True
+        if self.minions_cnt >= self._config.exploration_config.minions_cnt:
+            self.stop_reason = '探索战斗次数上限'
+            return True
+        self.activate_realm_raid(self._config.scrolls, self._config.exploration_config,
+                                 resume_task='EyeExploration', submit_scrolls=False)
         return False
+
+    def set_next_run(self, task, finish=False, success=None, server=True, target=None):
+        start_time = datetime.now().replace(microsecond=0) if finish else self.start_time
+        self.original_config.task_delay(task, start_time=start_time, success=success,
+                                        server=server, target=target)
 
     def quit_explore(self):
         deadline = time.monotonic() + 45
@@ -156,6 +181,7 @@ class ScriptTask(ExplorationTask):
         self.save_state()
         if (self.progress_current == 50 or
                 self.minions_cnt >= self.original_config.model.eye_exploration.options.max_battles or
+                self.minions_cnt >= self._config.exploration_config.minions_cnt or
                 datetime.now() - self.start_time >= self.limit_time):
             self.quit_explore()
         return True
@@ -173,12 +199,10 @@ class ScriptTask(ExplorationTask):
             raise ScriptEnd('探索进度记录日期不符')
 
         def save():
-            self.state['updated_at'] = datetime.now().isoformat(timespec='seconds')
-            tmp = path.with_name(path.name + '.' + uuid4().hex + '.tmp')
-            tmp.write_text(json.dumps(self.state, ensure_ascii=False, indent=2), encoding='utf8')
-            tmp.replace(path)
+            save_progress(path, self.state)
         self.save_state = save
         stage = '确认庭院账号'
+        yielded_to_raid = False
         try:
             self.screenshot()
             if not self.appear(self.I_CHECK_MAIN):
@@ -186,7 +210,7 @@ class ScriptTask(ExplorationTask):
             names = []
             for _ in range(2):
                 self.screenshot()
-                names.append((NICK.ocr(self.device.image) or '').replace(' ', '').strip())
+                names.append(SwitchAccount.verification_name(NICK.ocr(self.device.image)))
                 time.sleep(.4)
             if not names[0] or names[0] != names[1]:
                 raise GameStuckError('庭院角色名未能稳定识别')
@@ -198,6 +222,8 @@ class ScriptTask(ExplorationTask):
             self.state.pop('failure', None)
             save()
             self.ui_current = page_main
+            stage = '准备探索阵容和加成'
+            self.pre_process()
             stage = '进入探索地图'
             EyeAwakeningTask.enter_map(self)
             # Configure the cached limits from the isolated exploration copy.
@@ -214,6 +240,11 @@ class ScriptTask(ExplorationTask):
             self.ui_current = page_exploration
             if not self.ui_goto(page_main):
                 raise GameStuckError('退出后未确认返回庭院')
+        except TaskEnd:
+            self.state['status'] = '等待个人突破后继续'
+            save()
+            yielded_to_raid = True
+            raise
         except Exception as error:
             self.state['status'] = '出错'
             self.state['failure'] = {'stage': stage, 'reason': str(error)}
@@ -221,6 +252,8 @@ class ScriptTask(ExplorationTask):
             logger.exception(error)
             raise ScriptEnd('探索刷裂变之眼停止：' + str(error)) from error
         finally:
-            self.original_config.model.eye_exploration.scheduler.enable = False
-            self.original_config.save()
+            if not yielded_to_raid:
+                self.original_config.reload()
+                self.original_config.model.eye_exploration.scheduler.enable = False
+                self.original_config.save()
         raise TaskEnd('EyeExploration')

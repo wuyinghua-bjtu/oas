@@ -70,7 +70,7 @@ class ScriptTask(BaseTask):
                 settings.serial = f"{info['adb_host_ip']}:{info['adb_port']}"
                 args = psutil.Process(info['pid']).cmdline()
                 settings.emulatorinfo_name = args[args.index('--vm') + 1]
-                settings.screenshot_method, settings.control_method = 'window_background', 'window_message'
+                settings.screenshot_method, settings.control_method = 'ADB', 'ADB'
                 settings.adb_restart = settings.emulator_window_minimize = False
                 device = TeamDevice(config, info)
                 guarded.append((device, install_login_expiry_guard(device, title)))
