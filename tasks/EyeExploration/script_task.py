@@ -7,9 +7,9 @@ from uuid import uuid4
 
 from module.exception import GameStuckError, ScriptEnd, TaskEnd
 from module.logger import logger
-from tasks.EyeAwakening.progress import MAP_EYE, ProgressUncertain, read_drop_popup_quota
+from tasks.EyeAwakening.progress import MAP_EYE, ProgressUncertain
 from tasks.EyeAwakening.script_task import NICK, ScriptTask as EyeAwakeningTask
-from tasks.EyeExploration.progress import read_reward_quota
+from tasks.EyeExploration.progress import read_reward_quota, read_drop_popup_quota
 from tasks.Exploration.base import Scene
 from tasks.Exploration.solo import ScriptTask as ExplorationTask
 from tasks.Component.SwitchAccount.switch_account import SwitchAccount
@@ -206,6 +206,22 @@ class ScriptTask(ExplorationTask):
         yielded_to_raid = False
         try:
             self.screenshot()
+            previous_character = self.state.get('character')
+            previous_entry = self.state['accounts'].get(previous_character, {})
+            if previous_entry.get('battle_pending') and not self.appear(self.I_CHECK_MAIN):
+                try:
+                    read_drop_popup_quota(self.device.image)
+                except ProgressUncertain:
+                    pass
+                else:
+                    self.entry = previous_entry
+                    self.progress_current = previous_entry.get('progress')
+                    self.finish_battle_settlement(True)
+                    self.quit_explore()
+                    self.ui_current = page_exploration
+                    if not self.ui_goto(page_main):
+                        raise GameStuckError('恢复结算后无法回庭院核对账号')
+                    self.screenshot()
             if not self.appear(self.I_CHECK_MAIN):
                 for _ in range(2):
                     self.screenshot()

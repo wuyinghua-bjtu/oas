@@ -5,14 +5,23 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace as NS
 from unittest.mock import Mock, patch
+import numpy as np
 
 from module.exception import GameStuckError, ScriptEnd, TaskEnd
 from tasks.EyeAwakening.progress import ProgressUncertain
 from tasks.EyeExploration.script_task import ScriptTask, save_progress
 from tasks.Exploration.base import Scene
+from tasks.EyeExploration.progress import read_drop_popup_quota
 
 
 class ProgressWriteTest(unittest.TestCase):
+    def test_popup_uses_enlarged_secondary_counter(self):
+        reader = Mock()
+        reader.ocr.return_value = '今日已获得裂变之眼：'
+        reader.detect_and_ocr.return_value = [NS(ocr_text='7/50')]
+        with patch('tasks.EyeExploration.progress.RuleOcr', return_value=reader):
+            self.assertEqual(read_drop_popup_quota(np.zeros((720, 1280, 3), dtype=np.uint8)), (7, 50))
+
     def test_transient_windows_lock_retries_atomic_replace(self):
         error = PermissionError('locked')
         error.winerror = 32
