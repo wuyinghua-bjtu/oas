@@ -87,7 +87,8 @@ class SwitchCharacterVerificationTests(unittest.TestCase):
         task.enter_map = Mock()
         task.ui_goto = Mock(return_value=True)
         task.screenshot = Mock()
-        task.appear = Mock(side_effect=[False, True, True])
+        task.appear = Mock(side_effect=[False, False, True, True])
+        task.connection_pending = Mock(return_value=False)
         task.appear_then_click = Mock(return_value=True)
         task.map_visible = Mock(return_value=False)
         import numpy as np

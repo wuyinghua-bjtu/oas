@@ -71,12 +71,12 @@ class ScriptTask(EvoTask):
         return bool(self.click(button, interval=1.5))
 
     def dismiss_activity_overlay(self):
-        box = (440, 100, 650, 530)
+        box = (300, 80, 800, 550)
         reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
                          keyword='', name='eye_activity_overlay')
         rows = reader.detect_and_ocr(self.device.image)
         texts = [row.ocr_text.replace(' ', '') for row in rows]
-        if '补给领取' in texts:
+        if any(text in ('补给领取', '补绘领取') for text in texts):
             # The close icon is pink; confirm it within this popup's corner.
             region = self.device.image[100:210, 960:1100, :3].astype('int16')
             red, green, blue = region[:, :, 0], region[:, :, 1], region[:, :, 2]
@@ -86,7 +86,7 @@ class ScriptTask(EvoTask):
                 return bool(self.click(RuleClick(bounds, bounds, 'eye_supply_close'), interval=2))
             return False
         for row in rows:
-            if row.ocr_text.replace(' ', '').endswith('任意位置继续'):
+            if row.ocr_text.replace(' ', '').strip('—-－').endswith('任意位置继续'):
                 points = row.box
                 bounds = (box[0] + int(points[:, 0].mean()),
                           box[1] + int(points[:, 1].mean()), 1, 1)
@@ -98,6 +98,21 @@ class ScriptTask(EvoTask):
         if self.dismiss_activity_story():
             return True
         return super().try_close_unknown_page(skip_screenshot=True)
+
+    def switch_eye_account(self, account):
+        for attempt in range(2):
+            self.device.click_record_clear()
+            self.device.stuck_record_clear()
+            self.leave_inventory()
+            try:
+                if FindJadeTask.switch_support_account(self, account):
+                    return True
+            except GameStuckError as error:
+                if attempt or 'Cannot open account profile' not in str(error):
+                    raise
+                logger.warning('Account profile obscured; return safely and retry %s', account.character)
+            time.sleep(1)
+        return False
 
     def open_inventory(self):
         if not self.ui_goto(page_main):
@@ -415,7 +430,7 @@ class ScriptTask(EvoTask):
                         logger.warning('%s 上次推送中断，结果未知，不自动重复发送', current)
                     continue
                 stage = '切号及核对身份'
-                if not FindJadeTask.switch_support_account(self, account):
+                if not self.switch_eye_account(account):
                     raise GameStuckError('切换小号失败')
                 self.verified_identity(current)
                 stage = '读取探索地图进度'

@@ -37,7 +37,8 @@ class MapQuotaTest(unittest.TestCase):
 class MapProgressRetryTest(unittest.TestCase):
     def setUp(self):
         self.task = object.__new__(ScriptTask)
-        self.task.device = NS(image=object())
+        self.task.device = NS(image=object(), click_record_clear=lambda: None,
+                              stuck_record_clear=lambda: None)
 
     def read(self, values, minimum=0):
         self.task._verified_map_floor = minimum
@@ -79,7 +80,8 @@ class EyeFlowTest(unittest.TestCase):
                          find_jade=NS(sup_account_list=[]), save=lambda: None)
         self.task = object.__new__(ScriptTask)
         self.task.config = self.config
-        self.task.device = NS(image=object())
+        self.task.device = NS(image=object(), click_record_clear=lambda: None,
+                              stuck_record_clear=lambda: None)
         self.task.verified_identity = lambda name: None
         self.task.enter_map = lambda: None
         self.task.enter_fire_one = lambda: None
@@ -235,6 +237,27 @@ class ActivityStoryRecoveryTest(unittest.TestCase):
              patch.object(self.task, 'dismiss_activity_story', return_value=True) as skip:
             self.task.leave_inventory()
         skip.assert_called_once()
+
+    def test_music_tutorial_dashes_are_removed_before_matching(self):
+        row = NS(ocr_text='—点击任意位置继续—',
+                 box=np.array([[190, 45], [400, 45], [400, 70], [190, 70]]))
+        with patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+                patch.object(self.task, 'click', return_value=True) as click:
+            reader.return_value.detect_and_ocr.return_value = [row]
+            self.assertTrue(self.task.dismiss_activity_overlay())
+        self.assertEqual(reader.call_args.kwargs['roi'], (300, 80, 800, 550))
+        self.assertEqual(click.call_args.args[0].name, 'eye_activity_tutorial_continue')
+
+    def test_account_switch_returns_safely_and_retries_obscured_profile(self):
+        self.task.device = NS(click_record_clear=lambda: None, stuck_record_clear=lambda: None)
+        account = NS(character='TEST2')
+        with patch.object(self.task, 'leave_inventory') as leave, \
+                patch('tasks.EyeAwakening.script_task.FindJadeTask.switch_support_account',
+                      side_effect=[GameStuckError('Cannot open account profile for switching'), True]) as switch, \
+                patch('tasks.EyeAwakening.script_task.time.sleep'):
+            self.assertTrue(self.task.switch_eye_account(account))
+        self.assertEqual(leave.call_count, 2)
+        self.assertEqual(switch.call_count, 2)
 
 
 class FireOneConnectionTest(unittest.TestCase):
