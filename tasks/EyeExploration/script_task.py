@@ -212,7 +212,19 @@ class ScriptTask(ExplorationTask):
                 try:
                     read_drop_popup_quota(self.device.image)
                 except ProgressUncertain:
-                    pass
+                    try:
+                        read_reward_quota(self.device.image)
+                    except ProgressUncertain:
+                        pass
+                    else:
+                        self.entry = previous_entry
+                        self.progress_current = previous_entry.get('progress')
+                        self.finish_battle_settlement(True)
+                        self.quit_explore()
+                        self.ui_current = page_exploration
+                        if not self.ui_goto(page_main):
+                            raise GameStuckError('恢复结算后无法回庭院核对账号')
+                        self.screenshot()
                 else:
                     self.entry = previous_entry
                     self.progress_current = previous_entry.get('progress')
