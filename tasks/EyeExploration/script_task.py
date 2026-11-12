@@ -14,6 +14,7 @@ from tasks.Exploration.base import Scene
 from tasks.Exploration.solo import ScriptTask as ExplorationTask
 from tasks.Component.SwitchAccount.switch_account import SwitchAccount
 from tasks.GameUi.page import page_exploration, page_main
+from tasks.GotoMain.script_task import ScriptTask as GotoMainTask
 
 
 def save_progress(path, state):
@@ -206,7 +207,11 @@ class ScriptTask(ExplorationTask):
         try:
             self.screenshot()
             if not self.appear(self.I_CHECK_MAIN):
-                raise GameStuckError('请从大号庭院启动，避免接管其他任务')
+                for _ in range(2):
+                    self.screenshot()
+                    if not GotoMainTask._main_menu_visible(self):
+                        raise GameStuckError('请从大号庭院启动，避免接管其他任务')
+                    time.sleep(.4)
             names = []
             for _ in range(2):
                 self.screenshot()
@@ -216,8 +221,6 @@ class ScriptTask(ExplorationTask):
                 raise GameStuckError('庭院角色名未能稳定识别')
             character = names[0]
             self.entry = self.state['accounts'].setdefault(character, {'battles': 0})
-            if self.entry.get('battle_pending'):
-                raise GameStuckError('上次战斗结果未核对，需人工确认现场')
             self.state.update(status='运行中', character=character)
             self.state.pop('failure', None)
             save()
@@ -226,6 +229,19 @@ class ScriptTask(ExplorationTask):
             self.pre_process()
             stage = '进入探索地图'
             EyeAwakeningTask.enter_map(self)
+            if self.entry.get('battle_pending'):
+                progress = EyeAwakeningTask.map_progress(self)
+                minimum = max(self.entry.get('progress', 0),
+                              self.entry.get('observed_reward_progress', 0))
+                if progress < minimum:
+                    raise GameStuckError('断点恢复地图进度低于已确认进度')
+                self.entry.update(progress=progress,
+                                  verified_at=datetime.now().isoformat(timespec='seconds'),
+                                  recovery='pending_reconciled_from_verified_map')
+                self.entry['unverified_battles'] = self.entry.get('unverified_battles', 0) + 1
+                self.entry.pop('battle_pending', None)
+                self.progress_current = progress
+                save()
             # Configure the cached limits from the isolated exploration copy.
             _ = self._config
             stage = '读取掉落进度并刷探索'

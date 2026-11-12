@@ -176,6 +176,33 @@ class EyeExplorationTest(unittest.TestCase):
         with self.assertRaises(GameStuckError):
             self.task.finish_battle_settlement(False)
 
+    def test_pending_battle_reconciles_without_claiming_a_win(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'oas1' / (datetime.now().date().isoformat() + '.json')
+            path.parent.mkdir()
+            path.write_text(json.dumps({'date': datetime.now().date().isoformat(),
+                'accounts': {'test_character': {'battles': 2, 'progress': 3,
+                                               'battle_pending': True}}}), encoding='utf8')
+            with patch('tasks.EyeExploration.script_task.EyeAwakeningTask.map_progress', return_value=4):
+                with self.assertRaises(TaskEnd):
+                    self.run_with_mocked_handoff(directory, TaskEnd())
+            entry = self.task.entry
+            self.assertEqual(entry['progress'], 4)
+            self.assertEqual(entry['battles'], 2)
+            self.assertEqual(entry['unverified_battles'], 1)
+            self.assertNotIn('battle_pending', entry)
+
+    def test_pending_battle_rejects_regressing_progress(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'oas1' / (datetime.now().date().isoformat() + '.json')
+            path.parent.mkdir()
+            path.write_text(json.dumps({'date': datetime.now().date().isoformat(),
+                'accounts': {'test_character': {'progress': 3, 'battle_pending': True}}}), encoding='utf8')
+            with patch('tasks.EyeExploration.script_task.EyeAwakeningTask.map_progress', return_value=2):
+                with self.assertRaises(ScriptEnd):
+                    self.run_with_mocked_handoff(directory, TaskEnd())
+            self.assertTrue(self.task.entry['battle_pending'])
+
 
 if __name__ == '__main__':
     unittest.main()
