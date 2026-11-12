@@ -194,12 +194,28 @@ class ScriptTask(ExplorationTask):
         self.save_state()
         won = super().fire(button)
         if not won:
-            self.screenshot()
-            if self.get_current_scene() != Scene.MAIN:
+            deadline = time.monotonic() + 45
+            stable = 0
+            while time.monotonic() < deadline:
+                self.screenshot()
+                scene = self.get_current_scene()
+                if scene in (Scene.BATTLE_PREPARE, Scene.BATTLE_FIGHTING):
+                    self.run_general_battle(self._config.general_battle_config)
+                    self.minions_cnt += 1
+                    won = True
+                    break
+                if self.appear(self.I_REWARD) or self.appear(self.I_REWARD_GOLD):
+                    won = self.finish_battle_settlement(True)
+                    self.minions_cnt += 1
+                    break
+                stable = stable + 1 if scene == Scene.MAIN else 0
+                if stable >= 3:
+                    self.entry.pop('battle_pending', None)
+                    self.save_state()
+                    return False
+                time.sleep(.5)
+            if not won:
                 raise GameStuckError('探索挑战状态不明，保留待核对记录')
-            self.entry.pop('battle_pending', None)
-            self.save_state()
-            return False
         self.entry.update(progress=self.progress_current, battles=self.entry.get('battles', 0) + 1,
                           verified_at=datetime.now().isoformat(timespec='seconds'))
         self.entry.pop('battle_pending', None)
