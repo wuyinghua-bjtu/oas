@@ -248,6 +248,12 @@ class ScriptTask(ExplorationTask):
             self.screenshot()
             previous_character = self.state.get('character')
             previous_entry = self.state['accounts'].get(previous_character, {})
+            if previous_entry.get('battle_pending') and self.get_current_scene() == Scene.MAIN:
+                self.quit_explore()
+                self.ui_current = page_exploration
+                if not self.ui_goto(page_main):
+                    raise GameStuckError('待核对挑战返回庭院失败')
+                self.screenshot()
             if (self.state.get('failure') or self.state.get('status') == '等待个人突破后继续') and not previous_entry.get('battle_pending'):
                 if self.appear(self.I_E_EXIT_CONFIRM) or self.get_current_scene() == Scene.MAIN:
                     self.quit_explore()
