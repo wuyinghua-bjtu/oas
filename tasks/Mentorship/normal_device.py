@@ -108,7 +108,7 @@ class NormalDevices:
             m.click(*add.coord(), control_name='mentorship_invite_open')
             if not self._wait(m, Invite.I_INVITE_ENSURE.match):
                 return False
-            candidate = self._wait(m, lambda image: find_guard_candidate(image, self.name, self.read_name))
+            candidate = self.find_invitation_candidate()
             if not candidate:
                 return False
             m.click(*candidate, control_name='mentorship_select_apprentice')
@@ -130,3 +130,26 @@ class NormalDevices:
         finally:
             if not success:
                 self.leave_both()
+
+    def find_invitation_candidate(self):
+        candidate = self._wait(self.mentor, lambda frame: find_guard_candidate(
+            frame, self.name, self.read_name))
+        if candidate or self.read_name is None:
+            return candidate
+        for label in ('最近', '寮友', '跨区', '好友'):
+            self.mentor.screenshot()
+            if not Invite.I_INVITE_ENSURE.match(self.mentor.image):
+                return None
+            tabs = [(x + width // 2, y + height // 2)
+                    for text, (x, y, width, height) in self.read_name(self.mentor.image)
+                    if ''.join(text.split()) == label
+                    and 340 <= x < 780 and 100 <= y < 155]
+            if len(tabs) != 1:
+                continue
+            self.mentor.click(*tabs[0], control_name='mentorship_invite_tab_' + label)
+            time.sleep(.5)
+            candidate = self._wait(self.mentor, lambda frame: find_guard_candidate(
+                frame, self.name, self.read_name))
+            if candidate:
+                return candidate
+        return None
