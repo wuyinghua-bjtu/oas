@@ -33,8 +33,10 @@ def click(task,x,y,name):
 
 
 def title(task):
-    return ('阴界之门' in words(task,(510,25,270,65),'guild_nether_title')
-            and '排行' in words(task,(630,105,490,75),'guild_nether_rank'))
+    if not task.appear(HuntAssets.I_NW_CHALLAGE):
+        return False
+    ranking = words(task, (600,100,630,400), 'guild_nether_rank')
+    return sum(label in ranking for label in ('排行', '成员', '消灭轮数')) >= 2
 
 
 def room(task):
