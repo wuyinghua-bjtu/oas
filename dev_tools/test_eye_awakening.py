@@ -248,6 +248,24 @@ class ActivityStoryRecoveryTest(unittest.TestCase):
         self.assertEqual(reader.call_args.kwargs['roi'], (300, 80, 800, 550))
         self.assertEqual(click.call_args.args[0].name, 'eye_activity_tutorial_continue')
 
+    def test_supply_body_and_close_pixel_survive_title_ocr_error(self):
+        self.task.device.image[178:186, 1067:1076] = (240, 60, 180)
+        rows = [NS(ocr_text=text) for text in ('补价领取', '每日00:00可领取裂变之眼补给',
+                                             '下次补给将在22时12分后发放')]
+        with patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+                patch.object(self.task, 'click', return_value=True) as click:
+            reader.return_value.detect_and_ocr.return_value = rows
+            self.assertTrue(self.task.dismiss_activity_overlay())
+        self.assertEqual(click.call_args.args[0].name, 'eye_supply_close')
+
+    def test_supply_body_without_close_pixels_does_not_click(self):
+        rows = [NS(ocr_text=text) for text in ('每日00:00可领取裂变之眼补给', '下次补给将在')]
+        with patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+                patch.object(self.task, 'click') as click:
+            reader.return_value.detect_and_ocr.return_value = rows
+            self.assertFalse(self.task.dismiss_activity_overlay())
+        click.assert_not_called()
+
     def test_account_switch_returns_safely_and_retries_obscured_profile(self):
         self.task.device = NS(click_record_clear=lambda: None, stuck_record_clear=lambda: None)
         account = NS(character='TEST2')

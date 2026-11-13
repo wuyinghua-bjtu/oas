@@ -76,7 +76,10 @@ class ScriptTask(EvoTask):
                          keyword='', name='eye_activity_overlay')
         rows = reader.detect_and_ocr(self.device.image)
         texts = [row.ocr_text.replace(' ', '') for row in rows]
-        if any(text in ('补给领取', '补绘领取') for text in texts):
+        supply_text = ''.join(texts)
+        if (any(text in ('补给领取', '补绘领取') for text in texts)
+                or ('每日00:00可领取裂变之眼补给' in supply_text
+                    and '下次补给将在' in supply_text)):
             # The close icon is pink; confirm it within this popup's corner.
             region = self.device.image[100:210, 960:1100, :3].astype('int16')
             red, green, blue = region[:, :, 0], region[:, :, 1], region[:, :, 2]
