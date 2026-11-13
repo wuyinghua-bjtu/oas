@@ -25,6 +25,17 @@ class SwitchAccount(LoginAccount, ExitGame, GameUi, SwitchAccountAssets):
     def verification_name(text):
         return re.sub(r'[\s#·•]', '', text or '').rstrip('。.,，、★')
 
+    @staticmethod
+    def read_identity_name(image, expected, reader):
+        observed = SwitchAccount.verification_name(reader.ocr(image))
+        if (re.fullmatch(r'[A-Za-z0-9]{1,5}', expected)
+                and observed == expected + '★一'):
+            box = (125, 25, 90, 32)
+            narrow = RuleOcr(roi=box, area=box, mode='Single', method='Default',
+                             keyword='', name='switch_short_character_verify')
+            return SwitchAccount.verification_name(narrow.ocr(image))
+        return observed
+
     def __init__(self, config: Config, device: Device, to: AccountInfo, frm: AccountInfo = None):
         """
 
@@ -101,6 +112,14 @@ class SwitchAccount(LoginAccount, ExitGame, GameUi, SwitchAccountAssets):
         # The courtyard font can read 冥 as 买. Require the exact remaining
         # nickname and a separately matched observed 冥 glyph in two frames.
         expected=self.verification_name(self.to_account_info.character)
+        if re.fullmatch(r'[A-Za-z0-9]{1,5}', expected) and observed == expected + '★一':
+            verified = []
+            for _ in range(2):
+                self.screenshot()
+                verified.append(self.read_identity_name(self.device.image, expected, name_ocr))
+            if verified == [expected, expected]:
+                logger.info('Verified short character without background decoration: %s', expected)
+                return True
         if expected.startswith(local_text('LOCAL_OCR_NAME')) and observed == '买'+expected[1:]:
             from module.atom.image import RuleImage
             glyph=RuleImage(roi_front=(130,33,21,22),roi_back=(125,28,31,32),

@@ -52,6 +52,30 @@ class SwitchCharacterVerificationTests(unittest.TestCase):
         for observed in ('TEST20★', 'TEST3★', 'TEST2本★', 'TE★ST2'):
             self.assertNotEqual(SwitchAccount.verification_name(observed), 'TEST2')
 
+    def test_short_nickname_background_requires_two_exact_narrow_reads(self):
+        for narrow_text, accepted in (('TEST2', True), ('TEST3', False), ('TEST20', False)):
+            task = self.task('TEST2')
+            with patch(MODULE + '.LoginHandler'), patch(MODULE + '.RuleOcr') as ocr:
+                broad, narrow = Mock(), Mock()
+                broad.ocr.return_value = 'TEST2★一'
+                narrow.ocr.return_value = narrow_text
+                ocr.side_effect = [broad, narrow, narrow]
+                if accepted:
+                    self.assertTrue(task.switchAccount(skip_harvest=True))
+                    self.assertEqual(narrow.ocr.call_count, 2)
+                else:
+                    with self.assertRaises(RequestHumanTakeover):
+                        task.switchAccount(skip_harvest=True)
+                self.assertEqual(ocr.call_args.kwargs['roi'], (125, 25, 90, 32))
+
+    def test_short_nickname_does_not_truncate_real_suffix(self):
+        for observed in ('TEST20★一', 'TEST2本★一', 'TEST2一', 'OTHER★一'):
+            reader = Mock()
+            reader.ocr.return_value = observed
+            with patch(MODULE + '.RuleOcr') as narrow:
+                self.assertNotEqual(SwitchAccount.read_identity_name(None, 'TEST2', reader), 'TEST2')
+                narrow.assert_not_called()
+
     def test_trailing_ocr_comma_preserves_exact_account_number(self):
         task = self.task('测试角色10')
         with patch(MODULE + '.LoginHandler'), patch(MODULE + '.RuleOcr') as ocr:

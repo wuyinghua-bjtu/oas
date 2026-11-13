@@ -233,9 +233,10 @@ class ScriptTask(EvoTask):
         if not self.ui_goto(page_main):
             raise GameStuckError('无法回庭院核对角色')
         values = []
+        expected = SwitchAccount.verification_name(expected)
         for _ in range(2):
             self.screenshot()
-            values.append(SwitchAccount.verification_name(NICK.ocr(self.device.image)))
+            values.append(SwitchAccount.read_identity_name(self.device.image, expected, NICK))
             time.sleep(.4)
         expected = SwitchAccount.verification_name(expected)
         if values != [expected, expected]:
