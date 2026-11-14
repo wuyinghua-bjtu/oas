@@ -282,6 +282,21 @@ class ActivityStoryRecoveryTest(unittest.TestCase):
             self.assertFalse(self.task.dismiss_activity_overlay())
         click.assert_not_called()
 
+    def test_yesterday_reward_requires_both_labels_and_unique_claim(self):
+        claim = NS(ocr_text='领取', box=np.array([[190, 345], [270, 345], [270, 390], [190, 390]]))
+        labels = [NS(ocr_text='好友昨日战力'), NS(ocr_text='昨日狩猎奖励')]
+        with patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+                patch.object(self.task, 'click', return_value=True) as click:
+            reader.return_value.detect_and_ocr.return_value = labels + [claim]
+            self.assertTrue(self.task.dismiss_activity_overlay())
+        self.assertEqual(click.call_args.args[0].name, 'eye_yesterday_reward_claim')
+        for rows in ([claim], labels, labels + [claim, claim]):
+            with patch('tasks.EyeAwakening.script_task.RuleOcr') as reader, \
+                    patch.object(self.task, 'click') as click:
+                reader.return_value.detect_and_ocr.return_value = rows
+                self.assertFalse(self.task.dismiss_activity_overlay())
+            click.assert_not_called()
+
     def test_account_switch_returns_safely_and_retries_obscured_profile(self):
         self.task.device = NS(click_record_clear=lambda: None, stuck_record_clear=lambda: None)
         account = NS(character='TEST2')

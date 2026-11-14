@@ -77,6 +77,14 @@ class ScriptTask(EvoTask):
         rows = reader.detect_and_ocr(self.device.image)
         texts = [row.ocr_text.replace(' ', '') for row in rows]
         supply_text = ''.join(texts)
+        if all(label in supply_text for label in ('好友昨日战力', '昨日狩猎奖励')):
+            claims = [row for row in rows if row.ocr_text.replace(' ', '') == '领取']
+            if len(claims) != 1:
+                return False
+            points = claims[0].box
+            bounds = (box[0] + int(points[:, 0].mean()),
+                      box[1] + int(points[:, 1].mean()), 1, 1)
+            return bool(self.click(RuleClick(bounds, bounds, 'eye_yesterday_reward_claim'), interval=2))
         if (any(text in ('补给领取', '补绘领取') for text in texts)
                 or ('每日00:00可领取裂变之眼补给' in supply_text
                     and '下次补给将在' in supply_text)):
