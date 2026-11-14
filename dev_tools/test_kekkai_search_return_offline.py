@@ -12,6 +12,27 @@ CLASS = next(node for node in TREE.body if isinstance(node, ast.ClassDef))
 
 
 class SearchReturnTests(unittest.TestCase):
+    def test_repeated_exit_dialog_stops_without_click_guard_failure(self):
+        source = SOURCE.parents[1] / 'GotoMain/script_task.py'
+        tree = ast.parse(source.read_text(encoding='utf-8-sig'))
+        task_class = next(node for node in tree.body if isinstance(node, ast.ClassDef))
+        method = next(node for node in task_class.body if isinstance(node, ast.FunctionDef)
+                      and node.name == 'run')
+        clock = SimpleNamespace(value=0)
+        def advance(seconds):
+            clock.value += seconds
+        env = {'time': SimpleNamespace(monotonic=lambda: clock.value, sleep=advance),
+               'logger': Mock(), 'page_main': 'main', 'TaskEnd': RuntimeError}
+        exec(compile(ast.Module(body=[method], type_ignores=[]), str(source), 'exec'), env)
+        task = SimpleNamespace(screenshot=Mock(),
+                               _cancel_exit_dialog=Mock(return_value=True),
+                               _main_menu_visible=Mock())
+        with self.assertRaisesRegex(RuntimeError, 'repeated exit dialog'):
+            env['run'](task)
+        self.assertEqual(task._cancel_exit_dialog.call_count, 3)
+        task._main_menu_visible.assert_not_called()
+        self.assertFalse(hasattr(task, 'ui_current'))
+
     def test_main_return_requires_two_fresh_menu_confirmations(self):
         source = SOURCE.parents[1] / 'GotoMain/script_task.py'
         tree = ast.parse(source.read_text(encoding='utf-8-sig'))

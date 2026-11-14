@@ -43,9 +43,14 @@ class ScriptTask(GameUi):
         confirmed = 0
         last_back = started - 3
         back_count = 0
+        exit_cancel_count = 0
         while time.monotonic() - started < 35:
             self.screenshot()
+            if exit_cancel_count >= 3:
+                logger.warning('Exit dialog persisted after three cancellations; stop return recovery')
+                raise TaskEnd('Goto main unconfirmed: repeated exit dialog')
             if self._cancel_exit_dialog():
+                exit_cancel_count += 1
                 confirmed = 0
                 time.sleep(0.5)
                 continue
