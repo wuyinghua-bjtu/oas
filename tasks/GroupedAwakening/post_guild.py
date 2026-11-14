@@ -12,6 +12,7 @@ from tasks.GuildQuickParticipation.policy import select_accounts
 from tasks.FindJade.script_task import ScriptTask as FindJadeTask
 from tasks.Component.SwitchAccount.login_account import dismiss_new_server_promotion
 from tasks.Component.SwitchAccount.assets import SwitchAccountAssets
+from tasks.Restart.assets import RestartAssets
 from tasks.GroupedAwakening.ledger import atomic_json_write
 from tasks.GuildQuickParticipation.courtyard import complete_courtyard_affairs, return_from_courtyard_affairs
 
@@ -174,7 +175,7 @@ def _words(task, box):
     return ''.join(row.ocr_text for row in rule.detect_and_ocr(task.device.image)).replace(' ', '')
 
 
-def return_to_courtyard(task):
+def return_to_courtyard(task, account=None):
     task.step('寮任务后返回庭院', 90)
     for _ in range(16):
         task.screenshot()
@@ -187,7 +188,13 @@ def return_to_courtyard(task):
             task.device.click(1104,110,control_name='post_close_character_selector')
             time.sleep(1)
             continue
-        if task.appear(task.I_CHECK_LOGIN_FORM):
+        if (task.appear(task.I_CHECK_LOGIN_FORM)
+                or task.appear(RestartAssets.I_LOGIN_ENTER_GAME)
+                or task.ocr_appear(RestartAssets.O_LOGIN_ENTER_GAME)):
+            if account is not None:
+                if not FindJadeTask.switch_support_account(task, account):
+                    raise GameStuckError('登录页重跑切号失败：' + account.character)
+                return
             from tasks.Restart.login import LoginHandler
             LoginHandler(config=task.config,device=task.device)._app_handle_login()
             continue
@@ -234,7 +241,7 @@ def finish_all(task, config):
             continue
         if entry.get('material_submission') or entry.get('jade_status') == '待核对已提交':
             raise GameStuckError(account.character + ' 上次提交状态未确认，禁止重复提交')
-        return_to_courtyard(task)
+        return_to_courtyard(task, account=account)
         task.step('切换并核对 '+account.character, 300)
         if not FindJadeTask.switch_support_account(task, account):
             raise GameStuckError('切换账号失败：'+account.character)
