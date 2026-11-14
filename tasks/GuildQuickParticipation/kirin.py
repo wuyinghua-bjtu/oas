@@ -45,8 +45,10 @@ def no_assist_dialog(task):
 
 
 def guild_activity_board(task):
-    return ('集体任务' in _words(task, (140,150,230,80))
-            and '狩猎战' in _words(task, (140,400,230,80)))
+    if '集体任务' not in _words(task, (140,150,230,80)):
+        return False
+    activity = _words(task, (140,400,230,80))
+    return any(label in activity for label in ('狩猎战', '阴界之门'))
 
 
 def guild_activity_home(task):

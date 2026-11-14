@@ -17,7 +17,7 @@ from tasks.Component.GeneralBattle.config_general_battle import GeneralBattleCon
 from tasks.Component.GeneralInvite.general_invite import GeneralInvite
 from tasks.Component.SwitchSoul.switch_soul import SwitchSoul
 from tasks.Hunt.assets import HuntAssets
-from tasks.GuildQuickParticipation.kirin import open_guild, open_hunt_entry, GUILD_TASK, COURTYARD_GUILD, HUNT_TITLE
+from tasks.GuildQuickParticipation.kirin import open_guild, open_hunt_entry, HUNT_TITLE
 from tasks.GuildQuickParticipation.netherworld import wait_step, open_activity, click
 
 
@@ -45,14 +45,12 @@ class ScriptTask(GameUi, GeneralBattle, GeneralInvite, SwitchSoul, HuntAssets):
         if not self.ui_goto_page(page_main, timeout=35):
             raise GameStuckError('狩猎战无法返回庭院')
         try:
+            open_guild(self)
             if self.kirin_day:
-                open_guild(self)
                 wait_step(self, '从阴阳寮进入狩猎战', lambda: self.appear(HUNT_TITLE),
                           lambda: open_hunt_entry(self))
             else:
                 # Weekend guild sidebar has 阴界之门, not 狩猎战.
-                wait_step(self, '进入阴阳寮', lambda: self.appear(GUILD_TASK),
-                          lambda: self.appear(COURTYARD_GUILD) and click(self, 580, 644, 'hunt_guild_open'))
                 wait_step(self, '从阴阳寮进入阴界之门活动', lambda: self.appear(self.I_NW),
                           lambda: open_activity(self))
         except GameStuckError as error:

@@ -4,7 +4,7 @@ from module.atom.ocr import RuleOcr
 from module.exception import GameStuckError
 from tasks.Hunt.assets import HuntAssets
 from tasks.Component.GeneralBattle.assets import GeneralBattleAssets
-from tasks.GuildQuickParticipation.kirin import COURTYARD_GUILD, GUILD_TASK, EXIT_CONFIRM
+from tasks.GuildQuickParticipation.kirin import GUILD_TASK, EXIT_CONFIRM, open_guild, guild_activity_board, guild_activity_home
 from tasks.GuildQuickParticipation.reward import MISSION, claim_reward
 
 
@@ -48,6 +48,10 @@ def prepared(task):
 
 
 def open_activity(task):
+    if guild_activity_board(task):
+        if '阴界之门' not in words(task,(140,400,230,80),'guild_nether_board_entry'):
+            return False
+        return click(task,260,500,'guild_nether_open_board')
     if not task.appear(GUILD_TASK):
         return False
     box=(0,130,245,410)
@@ -61,8 +65,7 @@ def open_activity(task):
 
 
 def netherworld_and_reward(task, claim=True):
-    wait_step(task,'进入阴阳寮',lambda:task.appear(GUILD_TASK),
-              lambda:task.appear(COURTYARD_GUILD) and click(task,580,644,'guild_open'))
+    open_guild(task)
     wait_step(task,'进入活动地图',lambda:task.appear(HuntAssets.I_NW),
               lambda:open_activity(task))
     wait_step(task,'打开阴界之门',lambda:title(task),
@@ -80,12 +83,15 @@ def netherworld_and_reward(task, claim=True):
             return click(task,640,690,'guild_nether_result_close')
         return False
     wait_step(task,'退出准备并关闭结算',lambda:task.appear(HuntAssets.I_NW),leave)
-    wait_step(task,'返回阴阳寮',lambda:task.appear(GUILD_TASK),
+    wait_step(task,'返回阴阳寮',lambda:guild_activity_home(task),
               lambda:task.appear(HuntAssets.I_NW) and click(task,45,37,'guild_nether_map_back'))
     if not claim:
         return {'state': '待觉醒后领取'}
-    wait_step(task,'打开集体任务',lambda:task.appear(MISSION),
-              lambda:task.appear(GUILD_TASK) and click(task,210,208,'guild_nether_collective'))
+    def open_collective():
+        if guild_activity_board(task):
+            return click(task,260,250,'guild_nether_collective_board')
+        return task.appear(GUILD_TASK) and click(task,210,208,'guild_nether_collective')
+    wait_step(task,'打开集体任务',lambda:task.appear(MISSION),open_collective)
     result=claim_reward(task)
     if result['state']!='claimed':
         raise GameStuckError('阴界之门已退出，但未确认可领取集体任务奖励')

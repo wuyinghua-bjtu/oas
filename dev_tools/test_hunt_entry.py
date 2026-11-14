@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from tasks.GuildQuickParticipation.kirin import GUILD_HUNT, open_hunt_entry
+from tasks.GuildQuickParticipation.kirin import GUILD_HUNT, open_hunt_entry, guild_activity_board
 
 
 class HuntEntryTest(unittest.TestCase):
@@ -40,6 +40,19 @@ class HuntEntryTest(unittest.TestCase):
         calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
                  and isinstance(node.func, ast.Name) and node.func.id == 'open_hunt_entry']
         self.assertEqual(len(calls), 1)
+
+    def test_weekend_board_is_recognized(self):
+        for label in ('狩猎战', '阴界之门'):
+            with self.subTest(label=label), patch(
+                    'tasks.GuildQuickParticipation.kirin._words', side_effect=['集体任务', label]):
+                self.assertTrue(guild_activity_board(self.task))
+
+    def test_hunt_opens_guild_before_day_branch(self):
+        source = Path(__file__).resolve().parents[1] / 'tasks/Hunt/script_task.py'
+        tree = ast.parse(source.read_text(encoding='utf8'))
+        run = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == 'run')
+        navigation = next(node for node in run.body if isinstance(node, ast.Try))
+        self.assertEqual(navigation.body[0].value.func.id, 'open_guild')
 
 
 if __name__ == '__main__':
