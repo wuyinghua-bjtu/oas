@@ -33,6 +33,23 @@ sealed_page_has_next = board_state.sealed_page_has_next
 sealed_page_is_last = board_state.sealed_page_is_last
 completed_reward_button = board_state.completed_reward_button
 
+CURRENT_DETAIL_ROWS = (286, 364, 441, 519)
+
+
+def current_detail_goto_buttons():
+    return [RuleImage(roi_front=(1074,y,86,34), roi_back=(1060,y-8,120,52),
+                      threshold=0.8, method='Template matching',
+                      file='./tasks/WantedQuests/wq/wq_goto_current.png')
+            for y in CURRENT_DETAIL_ROWS]
+
+
+def parse_wanted_route(text):
+    text = text.replace('：', ':').replace('（', '(').replace('）', ')').strip().rstrip('、，。')
+    match = re.fullmatch(r'(.*?)\s*\(?数量:\s*(\d+)\s*\)?', text)
+    if not match or not match.group(1).strip() or int(match.group(2)) <= 0:
+        return None
+    return match.group(1).strip(), int(match.group(2))
+
 
 class SecretSpeedEncountered(Exception):
     """A bounty route entered a secret speed challenge."""
@@ -415,22 +432,17 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
             if type_wq == '闻':
                 type_wq = '秘闻'
             if current_detail:
-                y = (282, 357, 432, 507)[index]
-                fragment_label = RuleImage(roi_front=(636,y,118,35), roi_back=(632,y-4,126,43),
+                y = CURRENT_DETAIL_ROWS[index]
+                fragment_label = RuleImage(roi_front=(636,y,118,35), roi_back=(632,y-8,140,51),
                     threshold=0.83, method='Template matching',
                     file='./tasks/WantedQuests/wq/wq_fragment_current.png')
                 if self.appear(fragment_label):
                     type_wq = '式神'
             info_wq_1 = OCR_WQ_INFO[index].ocr(self.device.image)
-            info_wq_1 = info_wq_1.replace('：', ':').replace('（', '(').replace('）', ')')
-            info_wq_1 = info_wq_1.replace('：', ':')
-            match = re.match(r"^(.*?)[（(]?数量[：:]\s*(\d+)[)）]", info_wq_1)
-            if not match:
+            route = parse_wanted_route(info_wq_1)
+            if route is None:
                 return None
-            wq_destination = match.group(1)
-            wq_number = int(match.group(2))
-            if not wq_destination or wq_number <= 0:
-                return None
+            wq_destination, wq_number = route
             if current_detail and type_wq == '式神':
                 chapter = re.search(r'第[一二三四五六七八九十百\d]+章', wq_destination)
                 if chapter:
@@ -467,12 +479,12 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
         else:
             raise GameStuckError('无法识别悬赏任务详情，停止重复点击')
         if current_detail:
-            OCR_WQ_TYPE = [RuleOcr(roi=(636,y,73,35), area=(636,y,73,35), mode='Single', method='Default', keyword='', name=f'wq_new_type_{i}') for i,y in enumerate((282,357,432,507), 1)]
-            OCR_WQ_INFO = [RuleOcr(roi=(716,y,315,38), area=(716,y,315,38), mode='Single', method='Default', keyword='', name=f'wq_new_info_{i}') for i,y in enumerate((282,357,432,507), 1)]
-            GOTO_BUTTON = [RuleImage(roi_front=(1060,y,86,34), roi_back=(1048,y-8,110,52), threshold=0.8, method='Template matching', file='./tasks/WantedQuests/wq/wq_goto_current.png') for y in (284,359,434,509)]
+            OCR_WQ_TYPE = [RuleOcr(roi=(636,y,73,35), area=(636,y,73,35), mode='Single', method='Default', keyword='', name=f'wq_new_type_{i}') for i,y in enumerate(CURRENT_DETAIL_ROWS, 1)]
+            OCR_WQ_INFO = [RuleOcr(roi=(716,y,315,38), area=(716,y,315,38), mode='Single', method='Default', keyword='', name=f'wq_new_info_{i}') for i,y in enumerate(CURRENT_DETAIL_ROWS, 1)]
+            GOTO_BUTTON = current_detail_goto_buttons()
         if not any(self.appear(button) for button in GOTO_BUTTON):
             # 如果没有出现 '前往'按钮， 那就是这个可能是神秘任务但是没有解锁
-            logger.warning('This is a secret mission but not unlock')
+            logger.warning('悬赏详情未识别到前往按钮，不能据此确认任务未解锁')
             if current_detail:
                 self.device.save_screenshot(genre='wanted_detail_no_goto', interval=0)
                 logger.error('新版悬赏详情没有可识别的前往按钮，暂缓任务')
