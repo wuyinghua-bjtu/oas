@@ -38,6 +38,7 @@ class ScriptTask(GameUi, FindJadeAssets):
         self.fade_conf = self.config.find_jade
         self.cooperation_report = CooperationReport(self.config.config_name)
         self.report_status = '异常结束（仅包含已识别结果）'
+        self.session_recovery_attempts = 0
         try:
             self.run_find_jade()
         except RequestHumanTakeover:
@@ -190,8 +191,19 @@ class ScriptTask(GameUi, FindJadeAssets):
                 self.cooperation_report.account_status(accountInfo, '需要人工处理')
                 raise
             except GameSessionExpiredError as error:
+                attempts = getattr(self, 'session_recovery_attempts', 0)
+                if attempts < 2:
+                    self.session_recovery_attempts = attempts + 1
+                    self.cooperation_report.account_status(accountInfo, '登录失效，正在重试同一账号')
+                    logger.warning('FindJade session expired for %s; recover the same account (%s/2)',
+                                   accountInfo.character, attempts + 1)
+                    if self.recover_account_switch(accountInfo):
+                        # Reload progress from the in-memory durable ledger. Completed
+                        # accounts are skipped; this unfinished account is retried first.
+                        self.cooperation_report.account_status(accountInfo, '已恢复登录，重试未完成协作')
+                        return self.run_find_jade()
                 self.cooperation_report.account_status(accountInfo, '登录失效，已停止并保留未完成任务')
-                raise RequestHumanTakeover('Support account session expired; do not skip to another account') from error
+                raise RequestHumanTakeover('Support account session expired; same-account recovery exhausted') from error
             except (GameStuckError, GameTooManyClickError, GamePageUnknownError) as error:
                 logger.error('FindJade account %s-%s failed: %s: %s', accountInfo.character, accountInfo.svr, type(error).__name__, error)
                 self.cooperation_report.account_status(accountInfo, '异常，安全返回并有限重试：' + type(error).__name__)

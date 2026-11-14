@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image
 
 from module.atom.image import RuleImage
-from module.exception import GameSessionExpiredError, GameStuckError, ScriptError
+from module.exception import GameSessionExpiredError, GameStuckError, ScriptError, RequestHumanTakeover, TaskEnd
 from script import Script
 from tasks.base_task import BaseTask
 from tasks.GlobalGame.config_emergency import FriendInvitation
@@ -266,6 +266,60 @@ class RemoteLoginLoopTests(unittest.TestCase):
         self.assertEqual(login._app_handle_login.call_count, 2)
         self.assertEqual(login.harvest.call_count, 2)
         login.device.app_stop.assert_not_called()
+
+
+class FindJadeSessionRecoveryTests(unittest.TestCase):
+    def task(self):
+        from tasks.FindJade.script_task import ScriptTask
+        task = object.__new__(ScriptTask)
+        account = SimpleNamespace(character='offline-account', svr='offline-server',
+                                  is_valid=lambda: True)
+        task.fade_conf = SimpleNamespace(sup_account_list=[account])
+        task.cooperation_report = Mock()
+        task.cooperation_report.accounts = {}
+        task.cooperation_report.sender_pending.return_value = []
+        task.is_need_login = Mock(return_value=False)
+        task.switch_support_account = Mock(return_value=True)
+        task.recover_account_switch = Mock(return_value=True)
+        task.next_run = Mock()
+        task.device = Mock()
+        task.session_recovery_attempts = 0
+        return task, account
+
+    def test_recovered_session_retries_unfinished_account(self):
+        task, account = self.task()
+        interrupted, resumed = Mock(), Mock()
+        interrupted.open_cooperation_board.side_effect = GameSessionExpiredError('lost')
+        resumed.read_cooperation_info.return_value = []
+        task.create_wanted_quests = Mock(side_effect=[interrupted, resumed])
+        with self.assertRaises(TaskEnd):
+            task.run_find_jade()
+        task.recover_account_switch.assert_called_once_with(account)
+        self.assertEqual(task.switch_support_account.call_count, 2)
+        task.next_run.assert_called_once_with('FindJade', success=True)
+
+    def test_repeated_session_loss_is_bounded_and_preserves_work(self):
+        task, account = self.task()
+        board = Mock()
+        board.open_cooperation_board.side_effect = GameSessionExpiredError('lost')
+        task.create_wanted_quests = Mock(return_value=board)
+        with self.assertRaises(RequestHumanTakeover):
+            task.run_find_jade()
+        self.assertEqual(task.recover_account_switch.call_count, 2)
+        self.assertEqual(task.switch_support_account.call_count, 3)
+        task.cooperation_report.sender_finished.assert_not_called()
+        task.next_run.assert_not_called()
+
+    def test_failed_recovery_stops_without_advancing_accounts(self):
+        task, account = self.task()
+        board = Mock()
+        board.open_cooperation_board.side_effect = GameSessionExpiredError('lost')
+        task.create_wanted_quests = Mock(return_value=board)
+        task.recover_account_switch.return_value = False
+        with self.assertRaises(RequestHumanTakeover):
+            task.run_find_jade()
+        task.switch_support_account.assert_called_once_with(account)
+        task.cooperation_report.sender_finished.assert_not_called()
 
 
 if __name__ == '__main__':
