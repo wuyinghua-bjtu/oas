@@ -106,7 +106,7 @@ class ScriptTask(EvoTask):
         for attempt in range(2):
             self.device.click_record_clear()
             self.device.stuck_record_clear()
-            self.leave_inventory()
+            self.leave_inventory(allow_login=True)
             try:
                 if FindJadeTask.switch_support_account(self, account):
                     return True
@@ -182,10 +182,12 @@ class ScriptTask(EvoTask):
         # both scroll boundaries confirmed, top and bottom cover all rows.
         return combine_boundaries(top, bottom)
 
-    def leave_inventory(self):
+    def leave_inventory(self, allow_login=False):
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             self.screenshot()
+            if allow_login and self.appear(self.I_CHECK_LOGIN_FORM):
+                return
             if self.appear(self.I_CHECK_MAIN):
                 self.ui_current = page_main
                 return

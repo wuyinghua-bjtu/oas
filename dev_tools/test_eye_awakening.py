@@ -91,7 +91,7 @@ class EyeFlowTest(unittest.TestCase):
         self.task.return_to_map = lambda: None
         self.task.run_general_battle = lambda config: True
         self.task.inventory_counts = lambda: {5: 2, 6: 1}
-        self.task.leave_inventory = lambda: None
+        self.task.leave_inventory = lambda **kwargs: None
         self.patches = [patch('tasks.EyeAwakening.script_task.resolve_eye_accounts', return_value=[self.a, self.b]),
                         patch('tasks.EyeAwakening.script_task.FindJadeTask.switch_support_account', return_value=True),
                         patch('tasks.EyeAwakening.script_task.one_selected', return_value=True),
@@ -248,6 +248,22 @@ class ActivityStoryRecoveryTest(unittest.TestCase):
         self.assertEqual(reader.call_args.kwargs['roi'], (300, 80, 800, 550))
         self.assertEqual(click.call_args.args[0].name, 'eye_activity_tutorial_continue')
 
+    def test_account_switch_can_leave_login_page_without_clicks(self):
+        with patch.object(self.task, 'screenshot'), \
+                patch.object(self.task, 'appear', return_value=True) as appear, \
+                patch.object(self.task, 'click') as click, \
+                patch.object(self.task, 'dismiss_activity_story') as story:
+            self.task.leave_inventory(allow_login=True)
+        appear.assert_called_once_with(self.task.I_CHECK_LOGIN_FORM)
+        click.assert_not_called()
+        story.assert_not_called()
+
+    def test_post_inventory_still_requires_courtyard(self):
+        with patch.object(self.task, 'screenshot'), \
+                patch.object(self.task, 'appear', return_value=True) as appear:
+            self.task.leave_inventory()
+        appear.assert_called_once_with(self.task.I_CHECK_MAIN)
+
     def test_supply_body_and_close_pixel_survive_title_ocr_error(self):
         self.task.device.image[178:186, 1067:1076] = (240, 60, 180)
         rows = [NS(ocr_text=text) for text in ('补价领取', '每日00:00可领取裂变之眼补给',
@@ -275,6 +291,7 @@ class ActivityStoryRecoveryTest(unittest.TestCase):
                 patch('tasks.EyeAwakening.script_task.time.sleep'):
             self.assertTrue(self.task.switch_eye_account(account))
         self.assertEqual(leave.call_count, 2)
+        self.assertEqual(leave.call_args.kwargs, {'allow_login': True})
         self.assertEqual(switch.call_count, 2)
 
 
