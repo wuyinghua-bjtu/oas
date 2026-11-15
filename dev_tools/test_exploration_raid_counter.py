@@ -10,6 +10,8 @@ class ExplorationRaidCounterTest(unittest.TestCase):
     def setUp(self):
         self.task = object.__new__(BaseExploration)
         self.task.device = SimpleNamespace(image=object())
+        self.task.config = SimpleNamespace(
+            realm_raid=SimpleNamespace(scheduler=SimpleNamespace(enable=True)))
         self.task.appear = Mock(return_value=True)
         self.task.O_REALM_RAID_NUMBER1 = Mock()
         self.task.ui_click_until_disappear = Mock()
@@ -27,6 +29,15 @@ class ExplorationRaidCounterTest(unittest.TestCase):
         self.task.O_REALM_RAID_NUMBER1.ocr.return_value = (24, 6, 30)
         self.task.activate_realm_raid(self.scrolls, SimpleNamespace())
         self.task.ui_goto.assert_not_called()
+
+    def test_disabled_raid_continues_without_navigation_or_scheduling(self):
+        self.task.config.realm_raid.scheduler.enable = False
+        self.task.O_REALM_RAID_NUMBER1.ocr.return_value = (30, 0, 30)
+        self.task.set_next_run = Mock()
+        self.task.activate_realm_raid(self.scrolls, SimpleNamespace())
+        self.task.O_REALM_RAID_NUMBER1.ocr.assert_not_called()
+        self.task.ui_goto.assert_not_called()
+        self.task.set_next_run.assert_not_called()
 
     def test_threshold_and_full_counter_schedule(self):
         for current in (25, 30):

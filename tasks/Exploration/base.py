@@ -356,6 +356,9 @@ class BaseExploration(GameUi, GeneralBattle, GeneralRoom, GeneralInvite, Replace
         # 判断是否开启突破票检测
         if not con_scrolls.scrolls_enable:
             return
+        if not self.config.realm_raid.scheduler.enable:
+            logger.info('RealmRaid disabled, continue exploration without ticket handoff')
+            return
         if self.appear(self.I_E_EXPLORATION_CLICK) and self.appear(self.I_EXP_CREATE_TEAM):
             cu, res, total = self.O_REALM_RAID_NUMBER1.ocr(self.device.image)
         else:
