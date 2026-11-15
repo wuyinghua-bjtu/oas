@@ -70,6 +70,7 @@ class BaseExploration(GameUi, GeneralBattle, GeneralRoom, GeneralInvite, Replace
         if not reuse_screenshot:
             self.screenshot()
 
+        self.check_unknown_scene_timeout()
         if self.appear(self.I_CHECK_EXPLORATION) and not self.appear(self.I_E_SETTINGS_BUTTON):
             return Scene.WORLD
         elif self.appear(self.I_E_EXPLORATION_CLICK):
@@ -84,7 +85,23 @@ class BaseExploration(GameUi, GeneralBattle, GeneralRoom, GeneralInvite, Replace
             return Scene.TEAM
 
         logger.info("Unknown scene")
+        if getattr(self, '_unknown_scene_since', None) is None:
+            self._unknown_scene_since = time.monotonic()
         return Scene.UNKNOWN
+
+    def check_unknown_scene_timeout(self):
+        since = getattr(self, '_unknown_scene_since', None)
+        if since is None:
+            return
+        if (self.appear(self.I_CHECK_EXPLORATION) or self.appear(self.I_E_EXPLORATION_CLICK)
+                or self.appear(self.I_E_SETTINGS_BUTTON) or self.appear(self.I_E_AUTO_ROTATE_ON)
+                or self.appear(self.I_E_AUTO_ROTATE_OFF) or self.is_in_prepare()
+                or self.is_in_battle() or self.is_in_room() or self.appear(self.I_CREATE_ENSURE)):
+            self._unknown_scene_since = None
+            return
+        if time.monotonic() - since >= 45:
+            self.device.save_screenshot(genre='exploration_unknown_scene', interval=0)
+            raise GameStuckError('探索场景持续未知，停止空转；请核对设备系统服务和游戏状态')
 
     def pre_process(self):
         explorationConfig = self._config
@@ -117,7 +134,8 @@ class BaseExploration(GameUi, GeneralBattle, GeneralRoom, GeneralInvite, Replace
 
         self.ui_get_current_page()
         # 探索页面
-        self.ui_goto(page_exploration)
+        if not self.ui_goto_page(page_exploration, timeout=35):
+            raise GameStuckError('探索入口未确认，停止进入未知场景循环')
 
     def post_process(self):
         self.wait_until_stable(self.I_UI_BACK_RED)
