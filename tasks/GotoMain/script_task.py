@@ -28,13 +28,17 @@ class ScriptTask(GameUi):
         reader = RuleOcr(roi=roi, area=roi, mode='Full', method='Default',
                          keyword='', name='goto_main_exit_dialog')
         results = reader.detect_and_ocr(self.device.image)
-        if not any('退出游戏' in str(result.ocr_text) for result in results):
+        team_exit = any('确认退出组队面板' in str(result.ocr_text) for result in results)
+        game_exit = any('退出游戏' in str(result.ocr_text) for result in results)
+        if not (team_exit or game_exit):
             return False
+        label = '取消' if game_exit else '确定'
         for result in results:
-            if str(result.ocr_text).strip() == '取消':
+            if str(result.ocr_text).strip() == label:
                 position = (int(sum(point[0] for point in result.box) / 4 + roi[0]),
                             int(sum(point[1] for point in result.box) / 4 + roi[1]))
-                self.device.click(*position, control_name='GOTO_MAIN_CANCEL_EXIT')
+                self.device.click(*position, control_name=(
+                    'GOTO_MAIN_CANCEL_EXIT' if game_exit else 'GOTO_MAIN_CONFIRM_LEAVE_TEAM'))
                 return True
         return False
 

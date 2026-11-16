@@ -1,5 +1,6 @@
 """Invitation loading regression tests without devices or OCR inference."""
 import unittest
+import numpy as np
 from unittest.mock import Mock, patch
 
 from tasks.TripleAwakening.script_task import Participant, EvoTask
@@ -7,6 +8,28 @@ from tasks.Component.GeneralInvite.config_invite import FindMode
 
 
 class InviteLoadingTests(unittest.TestCase):
+    @patch('tasks.TripleAwakening.script_task.RuleOcr')
+    @patch('tasks.TripleAwakening.script_task.time.sleep')
+    @patch('tasks.TripleAwakening.script_task.time.monotonic')
+    @patch.object(EvoTask, 'invite_friend', return_value=True)
+    def test_refreshes_empty_dialog_before_retry(self, parent, clock, sleep, reader):
+        task = self.task()
+        clock.side_effect = (0, 0, 1, 13, 13, 14, 15)
+        frames = iter(('empty', 'room', 'ready'))
+        state = {}
+        task.screenshot.side_effect = lambda: state.update(frame=next(frames))
+        task.appear.side_effect = lambda rule: (
+            rule is task.I_INVITE_ENSURE and state['frame'] != 'room')
+        for name in ('O_F_LIST_1', 'O_F_LIST_2', 'O_F_LIST_3', 'O_F_LIST_4'):
+            getattr(task, name).ocr.side_effect = lambda image: (
+                '好友' if state['frame'] == 'ready' else '')
+        reader.return_value.detect_and_ocr.return_value = [Mock(
+            ocr_text='取消', box=np.array([[0, 0], [20, 0], [20, 20], [0, 20]]))]
+        self.assertTrue(task.invite_friend('test002'))
+        task.device.click.assert_called_once_with(430, 545, control_name='triple_refresh_friend_list')
+        task.appear_then_click.assert_called_once_with(task.I_ADD_2, interval=2)
+        parent.assert_called_once_with('test002', FindMode.AUTO_FIND)
+
     def task(self):
         task = Participant.__new__(Participant)
         task.device = Mock()

@@ -194,7 +194,9 @@ class Participant(EvoTask):
 
     def invite_friend(self, name=None, find_mode=None):
         from tasks.Component.GeneralInvite.config_invite import FindMode
-        deadline = time.monotonic() + 20
+        deadline = time.monotonic() + 60
+        refresh_at = time.monotonic() + 12
+        refreshes = 0
         while time.monotonic() < deadline:
             self.screenshot()
             if self.appear(self.I_INVITE_ENSURE):
@@ -203,6 +205,22 @@ class Participant(EvoTask):
                                        self.O_F_LIST_3, self.O_F_LIST_4)]
                 if any(label in self.friend_class for label in labels if label):
                     return super().invite_friend(name, find_mode or FindMode.AUTO_FIND)
+                if refreshes < 2 and time.monotonic() >= refresh_at:
+                    box = (420, 535, 185, 90)
+                    cancel = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                                     keyword='', name='triple_refresh_friend_list')
+                    rows = [row for row in cancel.detect_and_ocr(self.device.image)
+                            if row.ocr_text.strip() == '取消']
+                    if len(rows) == 1:
+                        points = rows[0].box
+                        self.device.click(int(box[0]+sum(float(p[0]) for p in points)/4),
+                                          int(box[1]+sum(float(p[1]) for p in points)/4),
+                                          control_name='triple_refresh_friend_list')
+                        refreshes += 1
+                        refresh_at = time.monotonic() + 12
+                        logger.warning('好友分类尚未加载，关闭后重新打开邀请列表（%s/2）', refreshes)
+                        time.sleep(.5)
+                        continue
             elif not self.appear(self.I_LOAD_FRIEND):
                 if not self.appear_then_click(self.I_ADD_2, interval=2):
                     self.appear_then_click(self.I_ADD_1, interval=2)
