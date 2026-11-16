@@ -11,6 +11,16 @@ from tasks.Restart.login import LoginHandler
 from tasks.GuildQuickParticipation.kirin import COURTYARD_GUILD
 
 
+def affairs_page_visible(task):
+    if task.appear(LoginHandler.I_PAGE):
+        return True
+    reader = RuleOcr(roi=(300,110,805,125), area=(300,110,805,125), mode='Full',
+                     method='Default', keyword='', name='guild_courtyard_page')
+    text = ''.join(row.ocr_text for row in reader.detect_and_ocr(task.device.image)).replace(' ', '')
+    return ('现世逢魔' in text and '阴阳寮资金' in text
+            and task.appear(LoginHandler.I_DAILY))
+
+
 def return_from_courtyard_affairs(task, timeout=25):
     """Close the confirmed affairs page and verify the courtyard."""
     deadline=monotonic()+timeout
@@ -39,7 +49,7 @@ def return_from_courtyard_affairs(task, timeout=25):
             task.device.click(870,108,control_name='guild_courtyard_fortune_close')
             sleep(.5)
             continue
-        affairs_visible=task.appear(LoginHandler.I_PAGE)
+        affairs_visible=affairs_page_visible(task)
         if not affairs_visible and (task.appear(COURTYARD_GUILD) or task.appear(task.I_CHECK_MAIN)):
             return True
         if affairs_visible and monotonic()-last_back>=3:
@@ -62,7 +72,9 @@ def complete_courtyard_affairs(config, device, timeout=90):
     navigation.ui_goto(page_main)
     if not handler.ui_click_multi_scale(handler.I_NOTE, handler.I_PAGE,
                                         timeout=5, scale_range=(0.8, 1.2)):
-        raise GameStuckError('Courtyard affairs page could not be confirmed')
+        handler.screenshot()
+        if not affairs_page_visible(handler):
+            raise GameStuckError('Courtyard affairs page could not be confirmed')
     deadline = monotonic() + timeout
     complete_clicks = 0
     daily_selected = False

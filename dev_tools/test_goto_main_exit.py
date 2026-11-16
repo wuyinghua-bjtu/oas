@@ -5,6 +5,18 @@ from tasks.GotoMain.script_task import ScriptTask
 
 
 class ExitDialogTests(unittest.TestCase):
+    def test_affairs_fallback_requires_both_task_labels_and_daily_control(self):
+        from tasks.GuildQuickParticipation.courtyard import affairs_page_visible
+        from tasks.Restart.login import LoginHandler
+        for text, daily, expected in [('现世逢魔阴阳寮资金', True, True),
+                                      ('现世逢魔', True, False),
+                                      ('现世逢魔阴阳寮资金', False, False)]:
+            task = Mock()
+            task.appear.side_effect = lambda asset: daily if asset is LoginHandler.I_DAILY else False
+            with patch('tasks.GuildQuickParticipation.courtyard.RuleOcr') as reader:
+                reader.return_value.detect_and_ocr.return_value = [Mock(ocr_text=text)]
+                self.assertEqual(affairs_page_visible(task), expected)
+
     def test_collective_missions_close_precedes_generic_back(self):
         from module.exception import TaskEnd
         task = ScriptTask.__new__(ScriptTask)
