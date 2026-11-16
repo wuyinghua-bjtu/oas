@@ -175,10 +175,25 @@ def _words(task, box):
     return ''.join(row.ocr_text for row in rule.detect_and_ocr(task.device.image)).replace(' ', '')
 
 
+def dismiss_received_fragment(task):
+    # This modal overlays collective missions and blocks their back button.
+    # Require both labels in their own regions before touching its close icon.
+    title = _words(task, (520,170,220,45))
+    if '已收到碎片' not in title:
+        return False
+    if '感谢' not in _words(task, (750,280,110,60)):
+        return False
+    task.device.click(865,165,control_name='post_close_received_fragment')
+    return True
+
+
 def return_to_courtyard(task, account=None):
     task.step('寮任务后返回庭院', 90)
     for _ in range(16):
         task.screenshot()
+        if dismiss_received_fragment(task):
+            time.sleep(1)
+            continue
         if dismiss_new_server_promotion(task):
             time.sleep(1)
             continue
