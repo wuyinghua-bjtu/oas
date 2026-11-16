@@ -3,11 +3,22 @@ import unittest
 import numpy as np
 from unittest.mock import Mock, patch
 
-from tasks.TripleAwakening.script_task import Participant, EvoTask
+from tasks.TripleAwakening.script_task import Participant, EvoTask, ScriptTask
 from tasks.Component.GeneralInvite.config_invite import FindMode
 
 
 class InviteLoadingTests(unittest.TestCase):
+    def test_invitation_requires_complete_identity_and_dungeon(self):
+        self.assertTrue(ScriptTask.invitation_verified(
+            '邀 test003 觉醒业火轮拾层', 'test003'))
+        for text in ('邀 test 觉醒业火轮拾层',
+                     '邀 test0030 觉醒业火轮拾层',
+                     '邀 test002 觉醒业火轮拾层',
+                     '邀 test003 秘闻'):
+            with self.subTest(text=text):
+                self.assertFalse(ScriptTask.invitation_verified(text, 'test003'))
+        self.assertFalse(ScriptTask.invitation_verified('觉醒业火轮拾层', ''))
+
     @patch('tasks.TripleAwakening.script_task.RuleOcr')
     @patch('tasks.TripleAwakening.script_task.time.sleep')
     @patch('tasks.TripleAwakening.script_task.time.monotonic')

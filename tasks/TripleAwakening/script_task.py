@@ -4,6 +4,7 @@ import copy
 from collections import deque
 import cv2
 import json
+import re
 import subprocess
 import time
 from datetime import datetime
@@ -451,6 +452,13 @@ class ScriptTask(EvoTask):
                 raise GameStuckError('队长返回庭院后角色名不匹配')
 
     @staticmethod
+    def invitation_verified(text, leader_name):
+        text = text.replace(' ', '')
+        return bool(leader_name and re.search(
+            r'(?<![0-9])' + re.escape(leader_name) + r'(?![0-9])', text)
+            and '觉醒业火轮拾层' in text)
+
+    @staticmethod
     def wait_room(players, final=False):
         for p in players:
             p.step('等待三人进入同一私人房间', 90)
@@ -472,14 +480,17 @@ class ScriptTask(EvoTask):
                         invite_ocr = RuleOcr(roi=(0,120,650,450), area=(0,120,650,450),
                                             mode='Full', method='Default', keyword='', name='triple_inviter')
                         text = ''.join(r.ocr_text for r in invite_ocr.detect_and_ocr(p.device.image)).replace(' ', '')
-                        if p.leader_name not in text:
-                            raise GameStuckError('邀请来源未确认是本队队长，停止接受')
-                        if '觉醒业火轮拾层' not in text:
-                            raise GameStuckError('邀请未确认是火麒麟十层：' + text)
+                        verified = ScriptTask.invitation_verified(text, p.leader_name)
+                        if not verified:
+                            # Invitation text may still be rendering. Keep the
+                            # existing stage deadline and resend loop; never
+                            # accept an invitation whose identity is uncertain.
+                            logger.warning('邀请身份或副本尚未读清，等待新画面后重试')
                         # A single accept can disappear without joining (for
                         # example a delayed invitation). Return to the shared
                         # loop so the leader can resend to that exact member.
-                        p.appear_then_click(p.I_I_ACCEPT, interval=2)
+                        if verified:
+                            p.appear_then_click(p.I_I_ACCEPT, interval=2)
                 p.screenshot()
                 ready.append(p.is_in_room())
             if all(ready):
