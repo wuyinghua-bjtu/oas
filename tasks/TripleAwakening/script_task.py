@@ -192,6 +192,27 @@ class Participant(EvoTask):
                 self.appear_then_click(self.I_BACK_YELLOW, interval=2)
                 last = time.monotonic()
 
+    def invite_friend(self, name=None, find_mode=None):
+        from tasks.Component.GeneralInvite.config_invite import FindMode
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            self.screenshot()
+            if self.appear(self.I_INVITE_ENSURE):
+                labels = [(rule.ocr(self.device.image) or '').replace(' ', '').replace('、', '')
+                          for rule in (self.O_F_LIST_1, self.O_F_LIST_2,
+                                       self.O_F_LIST_3, self.O_F_LIST_4)]
+                if any(label in self.friend_class for label in labels if label):
+                    return super().invite_friend(name, find_mode or FindMode.AUTO_FIND)
+            elif not self.appear(self.I_LOAD_FRIEND):
+                if not self.appear_then_click(self.I_ADD_2, interval=2):
+                    self.appear_then_click(self.I_ADD_1, interval=2)
+            time.sleep(.5)
+        directory = Path('log/GroupedAwakening/oas_leveling/assist_evidence')
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / (datetime.now().strftime('%Y%m%d_%H%M%S_%f') + '_friend_list.png')
+        cv2.imwrite(str(path), cv2.cvtColor(self.device.image, cv2.COLOR_RGB2BGR))
+        raise GameStuckError('好友分类未加载或识别区域不匹配，已保存当前好友列表：' + str(path))
+
     def detect_select(self, name=None):
         # Shared invite OCR uses fuzzy keywords and can lose numeric suffixes.
         # Numeric suffixes must match exactly in this task.
