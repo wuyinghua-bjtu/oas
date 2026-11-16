@@ -72,10 +72,17 @@ class ScriptTask(GameUi):
                 if not self.device.app_is_running():
                     raise TaskEnd('Goto main unconfirmed: game is not running')
                 clicked = False
-                for button in (self.I_UI_BACK_YELLOW, self.I_UI_BACK_BLUE, self.I_UI_BACK_RED):
-                    if self.appear_then_click(button, interval=1):
-                        clicked = True
-                        break
+                from tasks.GroupedAwakening.post_guild import collective_missions_visible, dismiss_received_fragment
+                if dismiss_received_fragment(self):
+                    clicked = True
+                elif collective_missions_visible(self):
+                    self.device.click(1168, 120, control_name='GOTO_MAIN_CLOSE_MISSIONS')
+                    clicked = True
+                else:
+                    for button in (self.I_UI_BACK_YELLOW, self.I_UI_BACK_BLUE, self.I_UI_BACK_RED):
+                        if self.appear_then_click(button, interval=1):
+                            clicked = True
+                            break
                 if not clicked:
                     self.device.adb_shell(['input', '-d', str(self.device.active_app_display_id()),
                                            'keyevent', '4'])

@@ -82,7 +82,7 @@ def finish_account(task, name, data, entry, save):
   # Guild entry can still be animating after the initial delay. Use bounded,
   # fresh observations and known templates, not one OCR sample in a small ROI.
   open_collective_missions(task)
-  snap();assert '集体任务' in words((520,30,240,65));n,remain,total=A.O_CM_NUMBER.ocr(d.image);assert total==30 and 0<=n<=30;print('COUNT BEFORE',n,flush=True)
+  snap();assert collective_missions_visible(task);n,remain,total=A.O_CM_NUMBER.ocr(d.image);assert total==30 and 0<=n<=30;print('COUNT BEFORE',n,flush=True)
   for x in (640,970):
    snap();label=words((x-80,460,160,65));print('CLAIM',x,label,flush=True)
    if '领取奖励' in label:
@@ -152,7 +152,7 @@ def open_collective_missions(task, timeout=25):
     next_click = 0.0
     while time.monotonic() < deadline:
         task.screenshot()
-        if '集体任务' in _words(task, (520,30,240,65)):
+        if collective_missions_visible(task):
             return
         if clicks >= 4 or time.monotonic() < next_click:
             time.sleep(.3)

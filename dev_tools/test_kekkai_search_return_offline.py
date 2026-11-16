@@ -3,7 +3,7 @@ from module.config.local_values import local_text
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 SOURCE = Path(__file__).resolve().parents[1] / 'tasks/KekkaiUtilize/script_task.py'
@@ -51,8 +51,9 @@ class SearchReturnTests(unittest.TestCase):
                                device=SimpleNamespace(app_is_running=Mock(return_value=True)),
                                appear_then_click=Mock(return_value=True),
                                I_UI_BACK_YELLOW='yellow', I_UI_BACK_BLUE='blue', I_UI_BACK_RED='red')
-        with self.assertRaisesRegex(RuntimeError, 'Goto main verified'):
-            env['run'](task)
+        with patch('tasks.GroupedAwakening.post_guild.dismiss_received_fragment', return_value=False), patch('tasks.GroupedAwakening.post_guild.collective_missions_visible', return_value=False):
+            with self.assertRaisesRegex(RuntimeError, 'Goto main verified'):
+                env['run'](task)
         self.assertEqual(task.screenshot.call_count, 3)
         self.assertEqual(task.ui_current, 'main')
 

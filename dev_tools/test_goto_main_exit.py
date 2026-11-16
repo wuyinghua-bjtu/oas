@@ -5,6 +5,21 @@ from tasks.GotoMain.script_task import ScriptTask
 
 
 class ExitDialogTests(unittest.TestCase):
+    def test_collective_missions_close_precedes_generic_back(self):
+        from module.exception import TaskEnd
+        task = ScriptTask.__new__(ScriptTask)
+        task.device = Mock()
+        task.screenshot = Mock()
+        task._cancel_exit_dialog = Mock(return_value=False)
+        task._main_menu_visible = Mock(side_effect=[False, True, True])
+        task.appear_then_click = Mock()
+        with patch('tasks.GroupedAwakening.post_guild.dismiss_received_fragment', return_value=False), patch('tasks.GroupedAwakening.post_guild.collective_missions_visible', return_value=True), patch('tasks.GotoMain.script_task.time.sleep'):
+            with self.assertRaises(TaskEnd):
+                task.run()
+        task.device.click.assert_called_once_with(1168, 120, control_name='GOTO_MAIN_CLOSE_MISSIONS')
+        task.appear_then_click.assert_not_called()
+        task.device.adb_shell.assert_not_called()
+
     def check_dialog(self, prompt, selected):
         task = ScriptTask.__new__(ScriptTask)
         task.device = Mock()
