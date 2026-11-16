@@ -199,6 +199,16 @@ class ScriptTask(EvoTask):
             if self.appear(self.I_CHECK_MAIN):
                 self.ui_current = page_main
                 return
+            if getattr(self.config, 'config_name', None) == 'oas_eye_3':
+                if self.appear(self.I_WIN) or self.appear(self.I_DE_WIN):
+                    self.click(self.C_WIN_1, interval=1)
+                    continue
+                if self.appear(self.I_REWARD) or self.appear(self.I_REWARD_GOLD):
+                    self.click(self.C_REWARD_1, interval=1)
+                    continue
+                if self.appear(self.I_FORM_TEAM) or self.appear(self.I_CHECK_AWAKE) or self.map_visible():
+                    self.click(BACK, interval=1.5)
+                    continue
             if self.dismiss_activity_story():
                 continue
             if self.appear(MD.I_CRAFT_TITLE_2026):
