@@ -187,6 +187,16 @@ def dismiss_received_fragment(task):
     return True
 
 
+def collective_missions_visible(task):
+    if '集体任务' in _words(task, (520,30,240,65)):
+        return True
+    # The welcome banner may cover the title. Check the unique bottom strip
+    # and the existing records icon instead of interpreting generic task text.
+    footer = _words(task, (720,550,550,65))
+    return ('双倍奖励' in footer and '今日已完成次数' in footer
+            and task.appear(A.I_CM_RECORDS))
+
+
 def return_to_courtyard(task, account=None):
     task.step('寮任务后返回庭院', 90)
     for _ in range(16):
@@ -219,7 +229,7 @@ def return_to_courtyard(task, account=None):
             task.appear_then_click(task.I_UI_BACK_YELLOW, interval=2)
         elif '获得奖励' in _words(task, (390,150,500,145)):
             task.device.click(1000,550,control_name='post_close_reward')
-        elif '集体任务' in _words(task, (520,30,240,65)):
+        elif collective_missions_visible(task):
             task.device.click(1168,120,control_name='post_close_missions')
         elif (task.appear(A.I_CM_SHRINE) or '宣言' in _words(task,(130,225,345,70))
               or '阴界之门' in _words(task,(0,140,245,310))

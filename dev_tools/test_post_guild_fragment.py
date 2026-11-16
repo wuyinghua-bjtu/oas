@@ -1,10 +1,21 @@
 """Offline checks for the fragment modal; no device actions."""
 import unittest
 from unittest.mock import Mock, patch
-from tasks.GroupedAwakening.post_guild import dismiss_received_fragment
+from tasks.GroupedAwakening.post_guild import dismiss_received_fragment, collective_missions_visible
 
 
 class FragmentModalTests(unittest.TestCase):
+    def test_missions_with_covered_title_require_footer_and_records(self):
+        task = Mock()
+        for records in (True, False):
+            task.appear.return_value = records
+            with patch('tasks.GroupedAwakening.post_guild._words',
+                       side_effect=['欢迎进入游戏', '双倍奖励10/10今日已完成次数30/30']):
+                self.assertEqual(collective_missions_visible(task), records)
+        with patch('tasks.GroupedAwakening.post_guild._words',
+                   side_effect=['欢迎进入游戏', '今日已完成次数30/30']):
+            self.assertFalse(collective_missions_visible(task))
+
     def test_closes_confirmed_fragment_modal(self):
         task = Mock()
         with patch('tasks.GroupedAwakening.post_guild._words',
