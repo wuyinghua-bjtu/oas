@@ -98,6 +98,39 @@ class GroupedEntryNavigationTests(unittest.TestCase):
                 participant.check_lock.assert_not_called()
 
 
+class TeamCreationNavigationTests(unittest.TestCase):
+    def test_navigation_failure_stops_before_dungeon_or_room_actions(self):
+        source = Path(__file__).resolve().parents[1] / 'tasks/TripleAwakening/script_task.py'
+        tree = ast.parse(source.read_text(encoding='utf-8'))
+        method = next(node for node in ast.walk(tree)
+                      if isinstance(node, ast.FunctionDef) and node.name == 'create_team')
+        # Execute the real navigation prefix without importing live-device code.
+        prefix = method.body[:next(i for i, node in enumerate(method.body)
+                                   if isinstance(node, ast.Expr)
+                                   and isinstance(node.value, ast.Call)
+                                   and getattr(node.value.func, 'attr', '') == 'evozone_enter') + 1]
+        module = ast.fix_missing_locations(ast.Module(body=prefix, type_ignores=[]))
+        for results in ([False], [True, False]):
+            with self.subTest(results=results):
+                leader = Mock()
+                leader.ui_goto.side_effect = results
+                with self.assertRaises(GameStuckError):
+                    exec(compile(module, str(source), 'exec'), {
+                        'leader': leader, 'page_exploration': page_exploration,
+                        'page_awake_zones': page_awake_zones,
+                        'GameStuckError': GameStuckError,
+                    })
+                leader.evozone_enter.assert_not_called()
+        leader = Mock()
+        exec(compile(module, str(source), 'exec'), {
+            'leader': leader, 'page_exploration': page_exploration,
+            'page_awake_zones': page_awake_zones, 'GameStuckError': GameStuckError,
+        })
+        self.assertEqual([call.args[0] for call in leader.ui_goto.call_args_list],
+                         [page_exploration, page_awake_zones])
+        leader.evozone_enter.assert_called_once()
+
+
 class MentorshipControlTests(unittest.TestCase):
     def test_mentorship_uses_matching_adb_capture_and_input(self):
         source = Path(__file__).resolve().parents[1] / 'tasks/Mentorship/script_task.py'

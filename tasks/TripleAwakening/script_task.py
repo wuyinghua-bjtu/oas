@@ -17,7 +17,7 @@ from module.notify.notify import Notifier
 from tasks.EvoZone.script_task import ScriptTask as EvoTask
 from tasks.EvoZone.config import KirinType, Layer
 from tasks.Component.GeneralInvite.config_invite import InviteConfig, InviteNumber
-from tasks.GameUi.page import page_main, page_awake_zones
+from tasks.GameUi.page import page_main, page_awake_zones, page_exploration
 from tasks.TripleAwakening.device import TeamDevice
 
 
@@ -342,27 +342,11 @@ class ScriptTask(EvoTask):
         # the captain's previous login watchdog no longer describes this step.
         leader.device.stuck_record_clear()
         leader.screenshot()
-        if leader.appear(leader.I_CHECK_MAIN):
-            box=(243,100,933,211)
-            reader=RuleOcr(roi=box,area=box,mode='Full',method='Default',
-                           keyword='',name='team_exploration_entry')
-            last=0
-            while True:
-                leader.screenshot()
-                if leader.appear(leader.I_CHECK_EXPLORATION):
-                    break
-                if leader.appear(leader.I_CHECK_MAIN) and time.monotonic()-last >= 3:
-                    rows=[r for r in reader.detect_and_ocr(leader.device.image)
-                          if r.ocr_text.replace(' ', '') == '探索']
-                    if len(rows)==1:
-                        points=rows[0].box
-                        leader.device.click(int(box[0]+sum(float(p[0]) for p in points)/4),
-                                            int(box[1]+sum(float(p[1]) for p in points)/4),
-                                            control_name='team_exploration_ocr')
-                        last=time.monotonic()
-                time.sleep(.3)
         leader.ui_get_current_page()
-        leader.ui_goto(page_awake_zones)
+        if not leader.ui_goto(page_exploration):
+            raise GameStuckError('未能确认探索入口，停止创建房间')
+        if not leader.ui_goto(page_awake_zones):
+            raise GameStuckError('未能确认觉醒入口，停止创建房间')
         leader.evozone_enter()
         if not leader.check_layer(Layer.TEN):
             raise GameStuckError('未找到十层，停止创建房间')
