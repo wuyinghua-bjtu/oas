@@ -7,6 +7,9 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from tasks.GameUi.game_ui import GameUi
+from tasks.GameUi.page import page_awake_zones, page_exploration
+from module.exception import GameStuckError
+from tasks.EvoZone.config import Layer
 
 
 class CourtyardExplorationEntryTests(unittest.TestCase):
@@ -58,6 +61,41 @@ class CourtyardExplorationEntryTests(unittest.TestCase):
         self.label.box = np.array([[1000, 45], [1040, 45], [1040, 65], [1000, 65]])
         self.assertFalse(self.task._click_exploration_label())
         self.task.device.click.assert_not_called()
+
+
+class GroupedEntryNavigationTests(unittest.TestCase):
+    def run_entry(self, participant):
+        source = Path(__file__).resolve().parents[1] / 'tasks/GroupedAwakening/script_task.py'
+        tree = ast.parse(source.read_text(encoding='utf-8'))
+        loop = next(node for node in ast.walk(tree) if isinstance(node, ast.For)
+                    and any(isinstance(child, ast.Constant) and isinstance(child.value, str)
+                            and child.value.startswith('首场取消阵容锁定 ')
+                            for child in ast.walk(node))
+                    and isinstance(node.target, ast.Name) and node.target.id == 'participant')
+        module = ast.fix_missing_locations(ast.Module(body=[loop], type_ignores=[]))
+        exec(compile(module, str(source), 'exec'), {
+            'active': [participant], 'page_exploration': page_exploration,
+            'page_awake_zones': page_awake_zones, 'Layer': Layer,
+            'GameStuckError': GameStuckError,
+        })
+
+    def test_confirmed_navigation_enters_and_unlocks(self):
+        participant = Mock(expected_name='test')
+        self.run_entry(participant)
+        self.assertEqual([call.args[0] for call in participant.ui_goto.call_args_list],
+                         [page_exploration, page_awake_zones])
+        participant.evozone_enter.assert_called_once()
+        participant.check_lock.assert_called_once_with(False)
+
+    def test_failed_navigation_never_enters_or_unlocks(self):
+        for results in ([False], [True, False]):
+            with self.subTest(results=results):
+                participant = Mock(expected_name='test')
+                participant.ui_goto.side_effect = results
+                with self.assertRaises(GameStuckError):
+                    self.run_entry(participant)
+                participant.evozone_enter.assert_not_called()
+                participant.check_lock.assert_not_called()
 
 
 class MentorshipControlTests(unittest.TestCase):

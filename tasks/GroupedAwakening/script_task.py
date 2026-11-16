@@ -30,7 +30,7 @@ from tasks.TripleAwakening.device import TeamDevice
 from tasks.GroupedAwakening.plan import GROUPS, resolve_accounts
 from tasks.GroupedAwakening.session_guard import install_login_expiry_guard
 from tasks.GroupedAwakening.ledger import atomic_json_write, finalize_settled_round
-from tasks.GameUi.page import page_awake_zones
+from tasks.GameUi.page import page_awake_zones, page_exploration
 from tasks.Mentorship.apprentice_souls import _assist_card
 
 
@@ -523,29 +523,10 @@ class ScriptTask(TeamTask):
                     for participant in active:
                         participant.step('首场取消阵容锁定 ' + participant.expected_name, 180)
                         participant.screenshot()
-                        if participant.appear(participant.I_CHECK_MAIN):
-                            box = (243,100,933,211)
-                            reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
-                                             keyword='', name='group_exploration_entry')
-                            deadline = time.monotonic() + 20
-                            last_click = 0
-                            while time.monotonic() < deadline:
-                                participant.screenshot()
-                                if participant.appear(participant.I_CHECK_EXPLORATION):
-                                    break
-                                if participant.appear(participant.I_CHECK_MAIN) and time.monotonic()-last_click >= 3:
-                                    rows = [r for r in reader.detect_and_ocr(participant.device.image)
-                                            if r.ocr_text.replace(' ', '') == '探索']
-                                    if len(rows) == 1:
-                                        points = rows[0].box
-                                        participant.device.click(int(box[0]+sum(float(p[0]) for p in points)/4),
-                                                                 int(box[1]+sum(float(p[1]) for p in points)/4),
-                                                                 control_name='group_exploration_entry')
-                                        last_click = time.monotonic()
-                                time.sleep(.3)
-                            else:
-                                raise GameStuckError('未能确认探索入口：' + participant.expected_name)
-                        participant.ui_goto(page_awake_zones)
+                        if not participant.ui_goto(page_exploration):
+                            raise GameStuckError('未能确认探索入口：' + participant.expected_name)
+                        if not participant.ui_goto(page_awake_zones):
+                            raise GameStuckError('未能确认觉醒入口：' + participant.expected_name)
                         participant.evozone_enter()
                         if not participant.check_layer(Layer.TEN):
                             raise GameStuckError('未确认觉醒十层：' + participant.expected_name)
