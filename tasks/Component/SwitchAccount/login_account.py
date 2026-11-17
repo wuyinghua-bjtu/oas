@@ -27,6 +27,18 @@ def dismiss_new_server_promotion(task):
 
 class LoginAccount(BaseTask, SwitchAccountAssets):
 
+    def wait_for_login_entry(self, timeout=15):
+        """Wait for the SDK transition, including an already open user center."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            self.screenshot()
+            if any(self.appear(rule) for rule in (
+                    self.I_CHECK_LOGIN_FORM, self.I_SA_NETEASE_GAME_LOGO,
+                    self.I_SA_SWITCH_ACCOUNT_BTN, self.I_SA_LOGIN_FORM_APPLE)):
+                return True
+            time.sleep(0.5)
+        return False
+
     def submit_account_login(self, timeout=15):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -321,9 +333,7 @@ class LoginAccount(BaseTask, SwitchAccountAssets):
                     False   未找到相应角色
         @rtype:bool
         """
-        self.screenshot()
-        #
-        if not (self.appear(self.I_CHECK_LOGIN_FORM) or self.appear(self.I_SA_NETEASE_GAME_LOGO)):
+        if not self.wait_for_login_entry():
             logger.error("Unknown Page,%s %s Login Failed", accountInfo.character, accountInfo.svr)
             return False
 
