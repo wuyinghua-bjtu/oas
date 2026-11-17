@@ -44,11 +44,17 @@ def current_detail_goto_buttons():
 
 
 def parse_wanted_route(text):
-    text = text.replace('：', ':').replace('（', '(').replace('）', ')').strip().rstrip('、，。')
-    match = re.fullmatch(r'(.*?)\s*\(?数量:\s*(\d+)\s*\)?', text)
+    text = text.replace('：', ':').replace('（', '(').replace('）', ')').strip()
+    text = re.sub(r'[\s、，。]+$', '', text)
+    match = re.fullmatch(r'(.*?)\s*\(?数量:\s*(\d+)\s*\)*', text)
     if not match or not match.group(1).strip() or int(match.group(2)) <= 0:
         return None
     return match.group(1).strip(), int(match.group(2))
+
+
+def normalize_wanted_route_type(text):
+    text = re.sub(r'[\s|｜]', '', text)
+    return {'式神石': '式神', '挑战': '式神', '闻': '秘闻'}.get(text, text)
 
 
 class SecretSpeedEncountered(Exception):
@@ -428,9 +434,7 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
             result = [-1, '', -1, GOTO_BUTTON[index], self.challenge, '']
             if not self.appear(GOTO_BUTTON[index]):
                 return None
-            type_wq = OCR_WQ_TYPE[index].ocr(self.device.image)
-            if type_wq == '闻':
-                type_wq = '秘闻'
+            type_wq = normalize_wanted_route_type(OCR_WQ_TYPE[index].ocr(self.device.image))
             if current_detail:
                 y = CURRENT_DETAIL_ROWS[index]
                 fragment_label = RuleImage(roi_front=(636,y,118,35), roi_back=(632,y-8,140,51),
