@@ -96,15 +96,15 @@ def finish_account(task, name, data, entry, save):
     previous=w;click(435,509,'refresh_mission')
    else:raise RuntimeError('刷新高级觉醒任务超限')
    snap();n,remain,total=A.O_CM_NUMBER.ocr(d.image);assert total==30 and 0<remain<=30
-   click(300,492,'open_awake_material');snap();assert '将提交' in words((500,45,270,65))
+   open_awake_material(task)
    for i in range(remain+12):
-    snap();head=words((500,45,270,65));m=re.search(r'将提交(\d+)次',head);assert m,head;selected=int(m.group(1));print('SELECTED',selected,'NEED',remain,flush=True)
+    selected=read_material_selection(task);print('SELECTED',selected,'NEED',remain,flush=True)
     if selected==remain:break
     assert selected<remain
     # Advance only when this material actually increases the selection.
     for y in (166,288,410,532):
-     click(929,y,'add_awake_material',.7);snap();new=words((500,45,270,65));q=re.search(r'将提交(\d+)次',new)
-     if q and int(q.group(1))==selected+1:
+     click(929,y,'add_awake_material',.7);new=read_material_selection(task)
+     if new==selected+1:
       d.click_record_clear()
       break
     else:
@@ -144,6 +144,48 @@ def finish_account(task, name, data, entry, save):
   else:raise GameStuckError(f'捐赠次数未能达到5次：{count}，费用：{cost}')
   entry['jade_status']='待核对已提交';save();click(640,546,'donate_100_jade',3);assert clear_reward()>0,'捐赠后未确认奖励';entry.update(jade_donated=100,jade_status='已确认奖励');save();print('DONE DONATED',flush=True)
  entry['verified_at']=datetime.now().isoformat(timespec='seconds');save()
+
+
+def material_selection(task):
+    text = _words(task, (500,45,270,65))
+    match = re.search(r'将提交([0-9]+)次', text)
+    return int(match.group(1)) if match else None
+
+
+def read_material_selection(task, timeout=12):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        task.screenshot()
+        selected = material_selection(task)
+        if selected is not None:
+            return selected
+        time.sleep(.3)
+    task.device.save_screenshot(genre='post_guild_material_count', interval=0)
+    raise GameStuckError('材料面板提交次数未读清，未继续选择或提交')
+
+
+def open_awake_material(task, timeout=25):
+    deadline = time.monotonic() + timeout
+    clicks = 0
+    next_click = 0.0
+    while time.monotonic() < deadline:
+        task.screenshot()
+        if material_selection(task) is not None:
+            return
+        # The welcome banner covers the title. A visible submit button means
+        # the modal already opened: wait for its count instead of clicking again.
+        if task.appear(A.I_CM_PRESENT):
+            time.sleep(.3)
+            continue
+        if (clicks < 3 and time.monotonic() >= next_click
+                and collective_missions_visible(task)
+                and '高级觉醒材料' in _words(task, (150,125,290,110))):
+            task.device.click(300,492,control_name='open_awake_material')
+            clicks += 1
+            next_click = time.monotonic() + 3
+        time.sleep(.3)
+    task.device.save_screenshot(genre='post_guild_material_entry', interval=0)
+    raise GameStuckError('高级觉醒材料面板未确认（已有限等待及重试，未提交）')
 
 
 def open_collective_missions(task, timeout=25):

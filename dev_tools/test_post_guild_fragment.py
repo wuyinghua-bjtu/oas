@@ -1,10 +1,31 @@
 """Offline checks for the fragment modal; no device actions."""
 import unittest
 from unittest.mock import Mock, patch
-from tasks.GroupedAwakening.post_guild import dismiss_received_fragment, collective_missions_visible, open_collective_missions
+from tasks.GroupedAwakening.post_guild import dismiss_received_fragment, collective_missions_visible, open_collective_missions, open_awake_material, read_material_selection
+from module.exception import GameStuckError
 
 
 class FragmentModalTests(unittest.TestCase):
+    def test_material_open_waits_when_banner_covers_open_modal(self):
+        task = Mock()
+        with patch('tasks.GroupedAwakening.post_guild.material_selection', side_effect=[None, 0]), patch('tasks.GroupedAwakening.post_guild.time.sleep'):
+            open_awake_material(task)
+        task.device.click.assert_not_called()
+
+    def test_material_open_retries_only_verified_high_grade_mission(self):
+        task = Mock()
+        task.appear.return_value = False
+        with patch('tasks.GroupedAwakening.post_guild.material_selection', side_effect=[None, 0]), patch('tasks.GroupedAwakening.post_guild.collective_missions_visible', return_value=True), patch('tasks.GroupedAwakening.post_guild._words', return_value='提交高级觉醒材料1个'), patch('tasks.GroupedAwakening.post_guild.time.sleep'):
+            open_awake_material(task)
+        task.device.click.assert_called_once_with(300,492,control_name='open_awake_material')
+
+    def test_unreadable_material_count_stops_without_clicking(self):
+        task = Mock()
+        with patch('tasks.GroupedAwakening.post_guild.time.monotonic', side_effect=[0,0,20]), patch('tasks.GroupedAwakening.post_guild.material_selection', return_value=None), patch('tasks.GroupedAwakening.post_guild.time.sleep'):
+            with self.assertRaises(GameStuckError):
+                read_material_selection(task)
+        task.device.click.assert_not_called()
+
     def test_entry_accepts_verified_missions_with_covered_title_without_clicking(self):
         task = Mock()
         with patch('tasks.GroupedAwakening.post_guild.collective_missions_visible', return_value=True):
