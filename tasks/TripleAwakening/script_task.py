@@ -238,7 +238,19 @@ class Participant(EvoTask):
                           for rule in (self.O_F_LIST_1, self.O_F_LIST_2,
                                        self.O_F_LIST_3, self.O_F_LIST_4)]
                 if any(label in self.friend_class for label in labels if label):
-                    return super().invite_friend(name, find_mode or FindMode.AUTO_FIND)
+                    if super().invite_friend(name, find_mode or FindMode.AUTO_FIND):
+                        return True
+                    # The shared lookup compresses recognized headers and can
+                    # associate a surviving label with the wrong physical tab.
+                    # Reopen once and use verified tab markers and exact names.
+                    if fallback_attempted:
+                        return False
+                    fallback_attempted = True
+                    self.appear_then_click(self.I_ADD_2, interval=2)
+                    time.sleep(1)
+                    if self._invite_without_category_text(name, find_mode or FindMode.AUTO_FIND):
+                        return True
+                    return False
                 if not fallback_attempted and time.monotonic() >= refresh_at:
                     fallback_attempted = True
                     logger.warning('好友分类 OCR 为空，使用已确认分类标记及完整昵称查找队员')

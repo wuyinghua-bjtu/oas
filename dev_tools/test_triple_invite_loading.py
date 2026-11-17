@@ -100,11 +100,25 @@ class InviteLoadingTests(unittest.TestCase):
         parent.assert_called_once_with('test002', FindMode.AUTO_FIND)
 
     @patch.object(EvoTask, 'invite_friend', return_value=False)
-    def test_preserves_recent_friend_mode_and_parent_result(self, parent):
+    @patch('tasks.TripleAwakening.script_task.time.sleep')
+    def test_preserves_recent_friend_mode_and_parent_result(self, sleep, parent):
         task = self.task()
         task.appear.side_effect = lambda rule: rule is task.I_INVITE_ENSURE
         for name in ('O_F_LIST_1', 'O_F_LIST_2', 'O_F_LIST_3', 'O_F_LIST_4'):
             getattr(task, name).ocr.return_value = '最近'
         self.assertFalse(task.invite_friend('test002', FindMode.RECENT_FRIEND))
         parent.assert_called_once_with('test002', FindMode.RECENT_FRIEND)
-        task.appear_then_click.assert_not_called()
+        task.appear_then_click.assert_called_once_with(task.I_ADD_2, interval=2)
+        task._invite_without_category_text.assert_called_once_with('test002', FindMode.RECENT_FRIEND)
+
+    @patch.object(EvoTask, 'invite_friend', return_value=False)
+    @patch('tasks.TripleAwakening.script_task.time.sleep')
+    def test_partial_headers_fall_back_to_physical_tabs(self, sleep, parent):
+        task = self.task()
+        task.appear.side_effect = lambda rule: rule is task.I_INVITE_ENSURE
+        for index, label in enumerate(('', '最近', '', ''), 1):
+            getattr(task, f'O_F_LIST_{index}').ocr.return_value = label
+        task._invite_without_category_text.return_value = True
+        self.assertTrue(task.invite_friend('test002', FindMode.AUTO_FIND))
+        parent.assert_called_once_with('test002', FindMode.AUTO_FIND)
+        task._invite_without_category_text.assert_called_once_with('test002', FindMode.AUTO_FIND)
