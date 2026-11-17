@@ -597,6 +597,13 @@ class ScriptTask(EvoTask):
                     p.click(p.C_WIN_1, interval=1)
                     continue
                 if p.appear(p.I_REWARD) or p.appear(p.I_REWARD_GOLD):
+                    # Reward pages can appear between polls without the short
+                    # victory animation. The reward itself confirms this win.
+                    won[index] = True
+                    record['pending_round'] = {'round':record['completed']+1,
+                                               'won':dict(zip(windows,won)),
+                                               'settled':dict(zip(windows,settled))}
+                    save()
                     p.click(p.C_REWARD_1, interval=1)
                     continue
                 if won[index]:
@@ -607,11 +614,15 @@ class ScriptTask(EvoTask):
                         p.click(p.C_REWARD_1, interval=1)
                         continue
                 continue_visible=False
-                if won[index] and index == 0:
+                if index == 0 and (won[index] or (len(players) > 1 and all(won[1:]) and all(settled[1:]))):
                     prompt = RuleOcr(roi=(420,270,440,70), area=(420,270,440,70),
                                      mode='Full', method='Default', keyword='', name='triple_settlement_continue')
                     text=''.join(r.ocr_text for r in prompt.detect_and_ocr(p.device.image))
                     continue_visible='邀请队友继续' in text
+                    if continue_visible and not won[index]:
+                        # Recovery requires both teammates' persisted victory
+                        # and settlement plus the leader's post-battle prompt.
+                        won[index] = True
                 returned=False
                 if won[index] and p.is_in_room():
                     room_ocr=RuleOcr(roi=(80,0,270,90),area=(80,0,270,90),mode='Full',

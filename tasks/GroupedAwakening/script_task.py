@@ -344,7 +344,11 @@ class ScriptTask(TeamTask):
                 if (resumed_battle and pending.get('round') == entry.get('active_round')
                         and entry.get('battle_phase') == 'fighting'
                         and set(pending.get('won', {})) == set(expected_windows)
-                        and all(pending['won'][w] is True for w in expected_windows)):
+                        and (all(pending['won'][w] is True for w in expected_windows)
+                             or (group_index != 3 and len(expected_windows) > 1
+                                 and all(pending['won'][w] is True
+                                         and pending.get('settled', {}).get(w) is True
+                                         for w in expected_windows[1:])))):
                     for idx, participant in enumerate(active):
                         proc = psutil.Process(team_infos[idx]['pid'])
                         binding = {'pid': proc.pid, 'started': proc.create_time(),
