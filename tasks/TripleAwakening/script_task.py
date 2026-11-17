@@ -180,6 +180,11 @@ class Participant(EvoTask):
                     last = time.monotonic()
                 continue
             if not self.is_in_room(False):
+                # A preceding cooperation scan can leave its quest board open.
+                # Its red close control is outside the room's yellow-back path.
+                if self.appear_then_click(self.I_UI_BACK_RED, interval=2):
+                    time.sleep(.3)
+                    continue
                 # The reward-to-confirm transition can briefly show neither
                 # the room nor the next page. Do not hand an unknown frame to
                 # navigation and miss the continue-invitation dialog.
