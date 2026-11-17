@@ -11,7 +11,7 @@ class HuntEntryTest(unittest.TestCase):
     def setUp(self):
         self.task = SimpleNamespace(device=SimpleNamespace(click=Mock()), appear=Mock())
 
-    @patch('tasks.GuildQuickParticipation.kirin.guild_activity_board', return_value=True)
+    @patch('tasks.GuildQuickParticipation.kirin._words', side_effect=['', '集体任务全天开放狩猎战'])
     def test_new_board_opens_without_legacy_sidebar(self, board):
         self.task.appear.return_value = False
         self.assertTrue(open_hunt_entry(self.task))
@@ -19,7 +19,7 @@ class HuntEntryTest(unittest.TestCase):
             260, 500, control_name='guild_open_hunting_board')
         self.task.appear.assert_not_called()
 
-    @patch('tasks.GuildQuickParticipation.kirin.guild_activity_board', return_value=False)
+    @patch('tasks.GuildQuickParticipation.kirin._words', side_effect=['', '', '狩猎战'])
     def test_legacy_sidebar_still_opens(self, board):
         self.task.appear.return_value = True
         self.assertTrue(open_hunt_entry(self.task))
@@ -28,7 +28,7 @@ class HuntEntryTest(unittest.TestCase):
             210, GUILD_HUNT.roi_front[1] + GUILD_HUNT.roi_front[3] // 2 + 30,
             control_name='guild_open_hunting')
 
-    @patch('tasks.GuildQuickParticipation.kirin.guild_activity_board', return_value=False)
+    @patch('tasks.GuildQuickParticipation.kirin._words', return_value='')
     def test_unknown_page_is_not_clicked(self, board):
         self.task.appear.return_value = False
         self.assertFalse(open_hunt_entry(self.task))

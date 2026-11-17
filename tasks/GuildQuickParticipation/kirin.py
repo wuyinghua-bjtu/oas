@@ -46,7 +46,9 @@ def no_assist_dialog(task):
 
 def guild_activity_board(task):
     if '集体任务' not in _words(task, (140,150,230,80)):
-        return False
+        words = _words(task, (100,90,1000,560))
+        return ('集体任务' in words and '全天开放' in words
+                and any(label in words for label in ('狩猎战', '柠猎战', '阴界之门')))
     activity = _words(task, (140,400,230,80))
     return any(label in activity for label in ('狩猎战', '柠猎战', '阴界之门'))
 
@@ -99,7 +101,16 @@ def open_hunt_entry(task):
             task.device.click(260,500,control_name='guild_open_hunting_board')
             return True
         return False
+    words = _words(task, (100,90,1000,560))
+    if '集体任务' in words and '全天开放' in words:
+        if any(label in words for label in ('狩猎战', '柠猎战')):
+            task.device.click(260,500,control_name='guild_open_hunting_board')
+            return True
+        return False
     if task.appear(GUILD_HUNT):
+        # A template alone also matches the collective-task artwork.
+        if '狩猎战' not in _words(task, (0,225,230,110)):
+            return False
         x,y,w,h=GUILD_HUNT.roi_front
         task.device.click(210,y+h//2+30,control_name='guild_open_hunting')
         return True

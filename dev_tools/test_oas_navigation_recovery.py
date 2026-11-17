@@ -29,9 +29,23 @@ class GuildEntryTests(unittest.TestCase):
     def test_legacy_layout_still_uses_legacy_entry(self):
         task = SimpleNamespace(appear=Mock(return_value=True),
                                device=SimpleNamespace(click=Mock()))
-        with patch.object(kirin, '_words', return_value=''):
+        with patch.object(kirin, '_words', side_effect=['', '', '狩猎战']):
             self.assertTrue(kirin.open_hunt_entry(task))
         task.device.click.assert_called_once_with(210,295,control_name='guild_open_hunting')
+
+    def test_missed_title_uses_full_board_evidence(self):
+        task = SimpleNamespace(appear=Mock(return_value=True),
+                               device=SimpleNamespace(click=Mock()))
+        with patch.object(kirin, '_words', side_effect=['拓（30）次', '集体任务全天开放狩猎战']):
+            self.assertTrue(kirin.open_hunt_entry(task))
+        task.device.click.assert_called_once_with(260,500,control_name='guild_open_hunting_board')
+
+    def test_false_legacy_template_without_hunt_text_is_rejected(self):
+        task = SimpleNamespace(appear=Mock(return_value=True),
+                               device=SimpleNamespace(click=Mock()))
+        with patch.object(kirin, '_words', return_value='拓（30）次'):
+            self.assertFalse(kirin.open_hunt_entry(task))
+        task.device.click.assert_not_called()
 
 
 class RoomLoadingTests(unittest.TestCase):
