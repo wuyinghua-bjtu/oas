@@ -25,7 +25,7 @@ class InviteLoadingTests(unittest.TestCase):
     @patch.object(EvoTask, 'invite_friend', return_value=True)
     def test_refreshes_empty_dialog_before_retry(self, parent, clock, sleep, reader):
         task = self.task()
-        clock.side_effect = (0, 0, 1, 13, 13, 14, 15)
+        clock.side_effect = (0, 0, 1, 13, 13, 13, 13, 14, 15)
         frames = iter(('empty', 'room', 'ready'))
         state = {}
         task.screenshot.side_effect = lambda: state.update(frame=next(frames))
@@ -47,11 +47,38 @@ class InviteLoadingTests(unittest.TestCase):
         task.screenshot = Mock()
         task.appear = Mock()
         task.appear_then_click = Mock(return_value=True)
+        task._invite_without_category_text = Mock(return_value=False)
         for name in ('I_INVITE_ENSURE', 'I_LOAD_FRIEND', 'I_ADD_1', 'I_ADD_2'):
             setattr(task, name, object())
         for name in ('O_F_LIST_1', 'O_F_LIST_2', 'O_F_LIST_3', 'O_F_LIST_4'):
             setattr(task, name, Mock())
         return task
+
+    @patch('tasks.TripleAwakening.script_task.time.sleep')
+    def test_blank_headers_use_verified_tab_and_exact_selected_friend(self, sleep):
+        task = self.task()
+        task.I_FLAG_1_ON = object()
+        task.I_FLAG_1_OFF = object()
+        task.I_SELECTED = object()
+        task.appear.return_value = True
+        task.detect_select = Mock(return_value=True)
+        task.click = Mock()
+        self.assertTrue(Participant._invite_without_category_text(task, 'test002', FindMode.AUTO_FIND))
+        task.detect_select.assert_called_once_with('test002')
+        task.click.assert_called_once_with(task.I_INVITE_ENSURE, interval=1)
+
+    @patch('tasks.TripleAwakening.script_task.time.sleep')
+    def test_blank_headers_do_not_invite_missing_exact_friend(self, sleep):
+        task = self.task()
+        task.I_SELECTED = object()
+        for index in range(1, 5):
+            setattr(task, f'I_FLAG_{index}_ON', object())
+            setattr(task, f'I_FLAG_{index}_OFF', object())
+        task.appear.return_value = True
+        task.detect_select = Mock(return_value=False)
+        task.click = Mock()
+        self.assertFalse(Participant._invite_without_category_text(task, 'test002', FindMode.AUTO_FIND))
+        task.click.assert_not_called()
 
     @patch('tasks.TripleAwakening.script_task.time.sleep')
     @patch.object(EvoTask, 'invite_friend', return_value=True)

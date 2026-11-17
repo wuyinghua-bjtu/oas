@@ -193,11 +193,44 @@ class Participant(EvoTask):
                 self.appear_then_click(self.I_BACK_YELLOW, interval=2)
                 last = time.monotonic()
 
+    def _invite_without_category_text(self, name, find_mode):
+        """Use verified tab markers and exact names when header OCR is blank."""
+        from tasks.Component.GeneralInvite.config_invite import FindMode
+        if not name:
+            return False
+        indices = (2,) if find_mode == FindMode.RECENT_FRIEND else (1, 2, 3, 4)
+        for index in indices:
+            on = getattr(self, f'I_FLAG_{index}_ON')
+            off = getattr(self, f'I_FLAG_{index}_OFF')
+            for _ in range(4):
+                self.screenshot()
+                if not self.appear(self.I_INVITE_ENSURE):
+                    return False
+                if self.appear(on):
+                    break
+                if not self.appear_then_click(off, interval=1):
+                    break
+                time.sleep(.5)
+            else:
+                continue
+            if not self.appear(on):
+                continue
+            for _ in range(2):
+                time.sleep(1)
+                if self.detect_select(name):
+                    self.screenshot()
+                    if not (self.appear(self.I_INVITE_ENSURE) and self.appear(self.I_SELECTED)):
+                        return False
+                    self.click(self.I_INVITE_ENSURE, interval=1)
+                    return True
+        return False
+
     def invite_friend(self, name=None, find_mode=None):
         from tasks.Component.GeneralInvite.config_invite import FindMode
         deadline = time.monotonic() + 60
         refresh_at = time.monotonic() + 12
         refreshes = 0
+        fallback_attempted = False
         while time.monotonic() < deadline:
             self.screenshot()
             if self.appear(self.I_INVITE_ENSURE):
@@ -206,6 +239,11 @@ class Participant(EvoTask):
                                        self.O_F_LIST_3, self.O_F_LIST_4)]
                 if any(label in self.friend_class for label in labels if label):
                     return super().invite_friend(name, find_mode or FindMode.AUTO_FIND)
+                if not fallback_attempted and time.monotonic() >= refresh_at:
+                    fallback_attempted = True
+                    logger.warning('好友分类 OCR 为空，使用已确认分类标记及完整昵称查找队员')
+                    if self._invite_without_category_text(name, find_mode or FindMode.AUTO_FIND):
+                        return True
                 if refreshes < 2 and time.monotonic() >= refresh_at:
                     box = (420, 535, 185, 90)
                     cancel = RuleOcr(roi=box, area=box, mode='Full', method='Default',
