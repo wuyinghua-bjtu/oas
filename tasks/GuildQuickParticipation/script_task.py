@@ -18,6 +18,24 @@ from tasks.GuildQuickParticipation.courtyard import complete_courtyard_affairs, 
 from tasks.GuildQuickParticipation.friend import perform_friend_actions
 from tasks.GuildQuickParticipation.kirin import kirin_and_reward, COURTYARD_GUILD, leave_guild_after_reward
 from tasks.GuildQuickParticipation.notification import notify_result
+from tasks.GotoMain.script_task import ScriptTask as GotoMainTask
+from tasks.GameUi.page import page_main
+
+
+def return_after_friend_actions(task):
+    """Use bounded recovery and require fresh courtyard evidence before moving on."""
+    recovery = GotoMainTask(config=task.config, device=task.device)
+    recovery.ui_current = None
+    try:
+        recovery.run()
+    except TaskEnd:
+        # GotoMain also raises TaskEnd on timeout or an unavailable game.
+        # Only its two-frame courtyard confirmation sets page_main.
+        if recovery.ui_current is not page_main:
+            raise GameStuckError('好友操作后未能确认返回庭院')
+    if recovery.ui_current is not page_main:
+        raise GameStuckError('好友操作后未能确认返回庭院')
+    task.ui_current = page_main
 
 
 class ScriptTask(GameUi):
@@ -71,12 +89,7 @@ class ScriptTask(GameUi):
                     outcome=perform_friend_actions(self)
                     entry[stage]=outcome['like']+'，'+outcome['friendship']
                     save()
-                    self.screenshot()
-                    if not self.appear(self.I_UI_BACK_RED):
-                        raise GameStuckError('好友界面返回按钮未识别')
-                    self.device.click(1178,115,control_name='guild_friend_back')
-                    if not self.wait_until_appear(COURTYARD_GUILD,wait_time=20):
-                        raise GameStuckError('好友操作后未能确认返回庭院')
+                    return_after_friend_actions(self)
                 if activity_stage not in entry:
                     stage=activity_stage
                     (kirin_and_reward if is_kirin else netherworld_and_reward)(self, claim=False)
