@@ -29,7 +29,8 @@ from tasks.TripleAwakening.script_task import (ScriptTask as TeamTask, Participa
 from tasks.TripleAwakening.device import TeamDevice
 from tasks.GroupedAwakening.plan import GROUPS, resolve_accounts
 from tasks.GroupedAwakening.session_guard import install_login_expiry_guard
-from tasks.GroupedAwakening.ledger import atomic_json_write, finalize_settled_round
+from tasks.GroupedAwakening.ledger import (atomic_json_write, finalize_settled_round,
+                                          BattleRecoveryUnsafe, check_cooperation_recovery)
 from tasks.GameUi.page import page_awake_zones, page_exploration
 from tasks.Mentorship.apprentice_souls import _assist_card
 
@@ -331,11 +332,16 @@ class ScriptTask(TeamTask):
                 if resumed_battle:
                     # PID/window identity is insufficient after another task
                     # switches accounts on the same running emulator.
+                    cooperation_path = Path('log/FindJade/reports/oas_leveling/latest.json')
+                    if cooperation_path.exists():
+                        cooperation = json.loads(cooperation_path.read_text(encoding='utf-8'))
+                        if cooperation.get('started_at', '').startswith(record['date']):
+                            check_cooperation_recovery(entry, cooperation)
                     guild_path = Path('log/GuildQuickParticipation/oas_leveling') / (today + '.json')
                     if guild_path.exists():
                         guild = json.loads(guild_path.read_text(encoding='utf-8'))
                         if guild_changed_after_record(guild, resume_updated_at):
-                            raise GameStuckError('战斗中断后寮活切换过账号，保留现场并要求核实，禁止按旧绑定恢复')
+                            raise BattleRecoveryUnsafe('战斗中断后寮活切换过账号，保留现场并要求核实，禁止按旧绑定恢复')
                 # Victory screens do not show account names. Finish only the
                 # recorded settlement first, then verify every account before
                 # crediting the round or issuing a new invitation.
@@ -586,6 +592,7 @@ class ScriptTask(TeamTask):
                         entry['battle_in_progress'] = True
                         entry['active_round'] = round_index+1
                         entry['battle_phase'] = 'starting'
+                        entry['battle_started_at'] = datetime.now().isoformat(timespec='seconds')
                         save()
                         leader.click_fire()
                         entry['battle_phase'] = 'fighting'
@@ -623,6 +630,12 @@ class ScriptTask(TeamTask):
             record['status'] = '出错'
             record['failure'] = {'group': None if group_index is None else group_index+1,
                                  'stage': stage, 'reason': str(error) or type(error).__name__}
+            if isinstance(error, BattleRecoveryUnsafe):
+                record['status'] = '待核对'
+                self.config.model.grouped_awakening.scheduler.enable = False
+                self.config.save()
+                save()
+                raise ScriptEnd('分组觉醒结算待核对，已保留进度并暂停脚本：' + str(error)) from error
             save()
             # Keep the scheduler alive and resume this activity later instead of
             # stopping the whole script on one failed group.

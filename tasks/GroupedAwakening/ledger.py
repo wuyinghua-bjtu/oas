@@ -6,6 +6,19 @@ import time
 from pathlib import Path
 
 
+class BattleRecoveryUnsafe(RuntimeError):
+    """An uncertain round needs reconciliation, not another automatic retry."""
+
+
+def check_cooperation_recovery(entry, cooperation):
+    if not entry.get('battle_in_progress'):
+        return
+    started = cooperation.get('started_at', '')
+    checkpoint = entry.get('battle_started_at', '')
+    if started and (not checkpoint or started > checkpoint):
+        raise BattleRecoveryUnsafe('寻找协作可能已切换战斗账号，首场结算证据待核对，禁止按旧窗口恢复')
+
+
 def atomic_json_write(path, record, attempts=20):
     path = Path(path)
     payload = json.dumps(record, ensure_ascii=False, indent=2)

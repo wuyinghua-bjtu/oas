@@ -5,10 +5,25 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from tasks.GroupedAwakening.ledger import atomic_json_write, finalize_settled_round
+from tasks.GroupedAwakening.ledger import (atomic_json_write, finalize_settled_round,
+                                          BattleRecoveryUnsafe, check_cooperation_recovery)
 
 
 class LedgerTests(unittest.TestCase):
+    def test_cooperation_after_round_requires_reconciliation(self):
+        entry = self.entry()
+        entry['battle_started_at'] = '2026-11-17T20:28:00'
+        before = copy.deepcopy(entry)
+        with self.assertRaises(BattleRecoveryUnsafe):
+            check_cooperation_recovery(entry, {'started_at': '2026-11-17T20:33:17'})
+        self.assertEqual(entry, before)
+        check_cooperation_recovery(entry, {'started_at': '2026-11-17T20:00:00'})
+
+    def test_legacy_round_without_start_time_is_not_assumed_safe(self):
+        with self.assertRaises(BattleRecoveryUnsafe):
+            check_cooperation_recovery(self.entry(), {'started_at': '2026-11-17T20:33:17'})
+        check_cooperation_recovery({'battle_in_progress': False}, {'started_at': 'later'})
+
     def entry(self):
         return {'completed': 0, 'target': 15, 'rounds': [],
                 'battle_in_progress': True, 'battle_phase': 'fighting', 'active_round': 1,
