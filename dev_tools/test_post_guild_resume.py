@@ -8,10 +8,22 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from tasks.GroupedAwakening.post_guild import finish_all, PostGuildSubmissionUncertain
+from tasks.GroupedAwakening.post_guild import finish_all, PostGuildSubmissionUncertain, return_to_courtyard
 
 
 class PostGuildResumeTests(unittest.TestCase):
+    def test_stopped_game_is_started_before_courtyard_check(self):
+        task = Mock()
+        task.device.app_is_running.return_value = False
+        task.appear.return_value = True
+        with patch('tasks.Restart.login.LoginHandler') as login, \
+                patch('tasks.GroupedAwakening.post_guild.dismiss_received_fragment', return_value=False), \
+                patch('tasks.GroupedAwakening.post_guild.dismiss_new_server_promotion', return_value=False):
+            return_to_courtyard(task)
+        task.device.app_start.assert_called_once_with()
+        login.return_value._app_handle_login.assert_called_once_with()
+        task.device.app_stop.assert_not_called()
+
     def test_recent_post_only_batch_survives_midnight(self):
         source = Path('tasks/GroupedAwakening/script_task.py').read_text(encoding='utf-8')
         function = next(node for node in ast.parse(source).body
