@@ -247,6 +247,31 @@ def finish_sender_cooperation(self):
             logger.info('悬赏板确认小号协作已无未完成项，结束等待')
             self.ui_click_until_disappear(self.I_UI_BACK_RED)
             return
+        # Go buttons belong to a quest detail, not the board just scanned.
+        # Select exactly one pending shared quest and confirm its detail.
+        if len(outstanding) != 1 or outstanding[0].get('inviteBtn') is None:
+            raise GameStuckError('Cannot uniquely select outstanding sender cooperation')
+        button = outstanding[0]['inviteBtn']
+        deadline = monotonic() + 12
+        next_click = 0
+        while monotonic() < deadline:
+            self.screenshot()
+            if any(self.appear(getattr(self, f'I_GOTO_{n}')) for n in range(1,5)):
+                break
+            if (monotonic() >= next_click
+                    and (self.appear(self.I_TRACE_ENABLE) or self.appear(self.I_TRACE_DISABLE))):
+                x,y,w,h = button.roi_front
+                if getattr(self, 'black_gold_skin', False):
+                    slot = outstanding[0].get('slot')
+                    if slot not in (1,2,3,4):
+                        raise GameStuckError('Missing sender cooperation card position')
+                    self.device.click(220+282*(slot-1),230,control_name='findjade_sender_detail')
+                else:
+                    self.device.click(x+w//2,y-40,control_name='findjade_sender_detail')
+                next_click = monotonic()+3
+            sleep(.2)
+        else:
+            raise GameStuckError('Cannot open outstanding sender cooperation details')
         routes = self.sender_routes(self.device.image, self.sender_challenge_tickets())
         if not routes:
             raise GameStuckError('No available sender route to finish cooperation')

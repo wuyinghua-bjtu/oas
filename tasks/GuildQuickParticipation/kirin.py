@@ -48,7 +48,7 @@ def guild_activity_board(task):
     if '集体任务' not in _words(task, (140,150,230,80)):
         return False
     activity = _words(task, (140,400,230,80))
-    return any(label in activity for label in ('狩猎战', '阴界之门'))
+    return any(label in activity for label in ('狩猎战', '柠猎战', '阴界之门'))
 
 
 def guild_activity_home(task):
@@ -90,9 +90,15 @@ def open_guild(task, timeout=30):
 
 
 def open_hunt_entry(task):
-    if guild_activity_board(task):
-        task.device.click(260,500,control_name='guild_open_hunting_board')
-        return True
+    # The old hunt label also matches the new board's collective-task row.
+    # Confirm the board before consulting that legacy template, including
+    # the observed OCR variant of 狩猎战.
+    if '集体任务' in _words(task, (140,150,230,80)):
+        activity = _words(task, (140,400,230,80))
+        if any(label in activity for label in ('狩猎战', '柠猎战')):
+            task.device.click(260,500,control_name='guild_open_hunting_board')
+            return True
+        return False
     if task.appear(GUILD_HUNT):
         x,y,w,h=GUILD_HUNT.roi_front
         task.device.click(210,y+h//2+30,control_name='guild_open_hunting')

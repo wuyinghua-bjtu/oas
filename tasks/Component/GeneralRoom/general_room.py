@@ -24,12 +24,13 @@ class GeneralRoom(BaseTask, GeneralRoomAssets):
         :return:
         """
         logger.info('Create room')
-        if not self.appear(self.I_CREATE_ROOM):
-            logger.warning('No create room button')
-            return False
+        # A team-page transition can temporarily hide the actionable button.
+        deadline = time.monotonic() + 20
         click_number = 0
-        while 1:
+        while time.monotonic() < deadline:
             self.screenshot()
+            if self.appear(self.I_CREATE_ENSURE) or self.appear(self.I_CREATE_ENSURE_2):
+                return True
             if click_number > 3:
                 logger.warning('Create room button do not take effect')
                 logger.warning('The most possible reason is that there are not challenge tickets')
@@ -41,6 +42,9 @@ class GeneralRoom(BaseTask, GeneralRoomAssets):
                 return True
             if self.appear(self.I_CREATE_ENSURE_2):
                 return True
+            time.sleep(.2)
+        logger.warning('Create room dialog was not confirmed within 20 seconds')
+        return False
 
     def ensure_private(self) -> bool:
         """

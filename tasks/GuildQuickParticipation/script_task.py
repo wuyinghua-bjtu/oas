@@ -9,6 +9,9 @@ from module.logger import logger
 from tasks.GameUi.game_ui import GameUi
 from tasks.Component.SwitchAccount.switch_account import SwitchAccount
 from tasks.FindJade.navigation import SupportServerSwitch
+import importlib
+from tasks.GuildQuickParticipation import kirin as _kirin
+importlib.reload(_kirin)
 from tasks.GuildQuickParticipation.netherworld import netherworld_and_reward
 from tasks.GuildQuickParticipation.policy import select_accounts, activity_for_day, next_start
 from tasks.GuildQuickParticipation.courtyard import complete_courtyard_affairs, return_from_courtyard_affairs
