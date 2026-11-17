@@ -23,6 +23,7 @@ from tasks.Mentorship.navigation import leave_activity_menu
 from tasks.Mentorship.vision import detect
 from tasks.GameUi.page import page_login
 from tasks.Mentorship.battle_pair import clear_verified_statistics
+from tasks.Mentorship.ownership import verify_apprentice_idle
 
 
 class ScriptTask(BaseTask):
@@ -47,10 +48,7 @@ class ScriptTask(BaseTask):
                 raise RuntimeError('请填写徒弟角色名和服务器')
             state.update(apprentice=apprentice_name, server=apprentice_server)
             save()
-            other_path = Path('config/oas_leveling.json')
-            raw = json.loads(other_path.read_text(encoding='utf-8'))
-            if raw.get('running_task') in ('GroupedAwakening', 'TripleAwakening', 'Mentorship'):
-                raise RuntimeError('其他任务可能正在使用徒弟模拟器')
+            verify_apprentice_idle('oas_leveling', self.config.config_name)
             inventory = json.loads(subprocess.check_output(
                 [str(MANAGER), 'info', '-v', 'all'], creationflags=subprocess.CREATE_NO_WINDOW))
             configs, devices = [], []
@@ -94,18 +92,7 @@ class ScriptTask(BaseTask):
                 actual = self.read_identity(player, devices[index])
                 if index == 1 and actual != expected:
                     player.step('切换指定徒弟', 300)
-                    switched = False
-                    for attempt in range(2):
-                        try:
-                            switched = FindJade.switch_support_account(player, accounts[0])
-                            break
-                        except GameNotRunningError as error:
-                            # The client can drop to the login page while the
-                            # switch is navigating; the retry starts right on
-                            # page_login and logs the account in there.
-                            logger.warning(f'{expected}: 切号被登录页打断（{error}），切号重试 {attempt + 1}')
-                            player.step('切换指定徒弟重试', 300)
-                            player.ui_get_current_page()
+                    switched = self.switch_apprentice(player, devices[index], accounts[0])
                     if not switched:
                         raise RuntimeError('无法切换指定徒弟')
                     player.step('切号后核对徒弟', 150)
@@ -137,6 +124,20 @@ class ScriptTask(BaseTask):
         target = (now + timedelta(days=1)).replace(hour=0, minute=30, second=0, microsecond=0)
         self.set_next_run('Mentorship', server=False, finish=True, target=target)
         raise TaskEnd('Mentorship')
+
+    def switch_apprentice(self, player, device, account):
+        for attempt in range(3):
+            try:
+                if FindJade.switch_support_account(player, account):
+                    return True
+            except (GameNotRunningError, GameStuckError, GameSessionExpiredError) as error:
+                logger.warning(f'徒弟切号失败（{error}），第 {attempt + 1}/3 次')
+            if attempt < 2:
+                device.stuck_record_clear()
+                device.click_record_clear()
+                player.step('切换指定徒弟重试', 300)
+                self.read_identity(player, device, recover_game=True, wait=60)
+        return False
 
     def read_identity(self, player, device, recover_game=True, wait=120):
         """Read the courtyard nickname, recovering a closed client or login page.
