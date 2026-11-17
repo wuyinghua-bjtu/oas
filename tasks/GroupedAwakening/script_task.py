@@ -622,8 +622,11 @@ class ScriptTask(TeamTask):
                     save()
                     logger.info('分组觉醒：第%s组 %s/15，成员 %s',group_index+1,entry['completed'],group)
             stage = '觉醒后完成寮任务与捐赠'
-            from tasks.GroupedAwakening.post_guild import finish_all
-            finish_all(players[0], self.config)
+            # Imported helpers stay cached in the long-lived scheduler worker.
+            # Reload at this boundary, after battles, to pick up post-work fixes.
+            import importlib
+            from tasks.GroupedAwakening import post_guild
+            importlib.reload(post_guild).finish_all(players[0], self.config)
             record['status'] = '完成（有失败）' if any(g.get('status') == '失败' for g in record['groups']) else '完成'
         except Exception as error:
             logger.exception(error)
