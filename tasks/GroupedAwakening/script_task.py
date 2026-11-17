@@ -40,6 +40,20 @@ def resumable_today(record, today):
             record.get('status') not in ('完成', '完成（有失败）'))
 
 
+def resumable_post_work(record, now):
+    """Continue a recent post-only batch across midnight without replaying battles."""
+    if (record.get('status') in ('完成', '完成（有失败）')
+            or record.get('failure', {}).get('stage') != '觉醒后完成寮任务与捐赠'
+            or not record.get('groups')
+            or not all(group.get('completed') == 15 for group in record['groups'])):
+        return False
+    try:
+        age = now - datetime.fromisoformat(record['updated_at'])
+    except (KeyError, ValueError, TypeError):
+        return False
+    return timedelta(0) <= age <= timedelta(hours=12)
+
+
 def guild_changed_after_record(guild, saved_at):
     return not saved_at or not guild.get('updated_at') or guild['updated_at'] > saved_at
 
@@ -222,7 +236,7 @@ class ScriptTask(TeamTask):
                 old = json.loads(previous_path.read_text(encoding='utf-8'))
                 # A previous day's ledger is historical evidence, not today's
                 # battle state. Guild work may have switched every character.
-                if (resumable_today(old, today) or
+                if (resumable_today(old, today) or resumable_post_work(old, datetime.now()) or
                         (old.get('date') != today and old.get('updated_at', '').startswith(today)
                          and old.get('status') not in ('完成', '完成（有失败）'))):
                     # Continue an active run that actually crossed midnight;
@@ -626,13 +640,19 @@ class ScriptTask(TeamTask):
             # Reload at this boundary, after battles, to pick up post-work fixes.
             import importlib
             from tasks.GroupedAwakening import post_guild
-            importlib.reload(post_guild).finish_all(players[0], self.config)
+            importlib.reload(post_guild).finish_all(players[0], self.config, record['date'])
             record['status'] = '完成（有失败）' if any(g.get('status') == '失败' for g in record['groups']) else '完成'
         except Exception as error:
             logger.exception(error)
             record['status'] = '出错'
             record['failure'] = {'group': None if group_index is None else group_index+1,
                                  'stage': stage, 'reason': str(error) or type(error).__name__}
+            if type(error).__name__ == 'PostGuildSubmissionUncertain':
+                record['status'] = '待核对'
+                self.config.model.grouped_awakening.scheduler.enable = False
+                self.config.save()
+                save()
+                raise TaskEnd('分组觉醒捐赠待核对，已保留进度并暂停此任务：' + str(error)) from error
             if isinstance(error, BattleRecoveryUnsafe):
                 record['status'] = '待核对'
                 self.config.model.grouped_awakening.scheduler.enable = False

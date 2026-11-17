@@ -283,10 +283,11 @@ def return_to_courtyard(task, account=None):
     raise GameStuckError('寮任务后无法确认返回庭院')
 
 
-def finish_all(task, config):
+def finish_all(task, config, ledger_date=None):
+    today = ledger_date or datetime.now().strftime('%Y-%m-%d')
+    datetime.strptime(today, '%Y-%m-%d')
     selection = config.model.guild_quick_participation.guild_accounts
     accounts = select_accounts(config.find_jade.sup_account_list, selection.characters, selection.server)
-    today = datetime.now().strftime('%Y-%m-%d')
     path = Path('log/GroupedAwakening/oas_leveling') / ('post_guild_' + today + '.json')
     data = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {
         'date':today, 'status':'进行中', 'accounts':{}}
@@ -295,6 +296,7 @@ def finish_all(task, config):
         atomic_json_write(path, data)
     guild_path = Path('log/GuildQuickParticipation') / config.config_name / (today + '.json')
     guild_state = json.loads(guild_path.read_text(encoding='utf-8')) if guild_path.exists() else {}
+    pending = []
     for account in accounts:
         entry = data['accounts'].setdefault(account.character,{})
         previous_affairs = guild_state.get('accounts', {}).get(account.character, {}).get('庭院事务')
@@ -307,7 +309,9 @@ def finish_all(task, config):
         if post_done and 'courtyard_status' in entry:
             continue
         if entry.get('material_submission') or entry.get('jade_status') == '待核对已提交':
-            raise GameStuckError(account.character + ' 上次提交状态未确认，禁止重复提交')
+            # Keep the spend guard, but do not block unrelated remaining accounts.
+            pending.append(account.character)
+            continue
         return_to_courtyard(task, account=account)
         task.step('切换并核对 '+account.character, 300)
         if not FindJadeTask.switch_support_account(task, account):
@@ -323,6 +327,16 @@ def finish_all(task, config):
             save()
             if not return_from_courtyard_affairs(task):
                 raise GameStuckError('庭院事务后未能确认返回庭院')
+    if pending:
+        data['status'] = '待核对'
+        data['pending_accounts'] = pending
+        save()
+        raise PostGuildSubmissionUncertain('、'.join(pending) + ' 上次提交状态未确认，已保留记录并完成其余账号，禁止重复提交')
+    data.pop('pending_accounts', None)
     data['status'] = ('完成' if all(e.get('guild_tasks') == '30/30' for e in data['accounts'].values())
                       else '完成（有未满30次）')
     save()
+
+
+class PostGuildSubmissionUncertain(GameStuckError):
+    """A durable ambiguous spend needs reconciliation, not blind retries."""
