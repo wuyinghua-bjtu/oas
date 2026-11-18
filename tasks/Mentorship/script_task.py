@@ -24,6 +24,7 @@ from tasks.Mentorship.vision import detect
 from tasks.GameUi.page import page_login
 from tasks.Mentorship.battle_pair import clear_verified_statistics
 from tasks.Mentorship.ownership import verify_apprentice_idle
+from tasks.Restart.login import LoginHandler
 
 
 class ScriptTask(BaseTask):
@@ -90,6 +91,9 @@ class ScriptTask(BaseTask):
                 if detect(devices[index].image, 'guard_entry') and not leave_activity_menu(devices[index]):
                     raise RuntimeError('无法离开妖气探索')
                 actual = self.read_identity(player, devices[index])
+                if index == 0 and actual is None and player.ui_page_appear(page_login):
+                    LoginHandler(configs[index], devices[index])._app_handle_login()
+                    actual = self.read_identity(player, devices[index], recover_game=False)
                 if index == 1 and actual != expected:
                     player.step('切换指定徒弟', 300)
                     switched = self.switch_apprentice(player, devices[index], accounts[0])

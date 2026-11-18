@@ -39,6 +39,12 @@ class SwitchRetryTests(unittest.TestCase):
         self.assertTrue(result)
         task.read_identity.assert_not_called()
 
+    def test_mentor_login_recovery_precedes_identity_rejection(self):
+        import inspect
+        source = inspect.getsource(ScriptTask.run)
+        self.assertIn('LoginHandler(configs[index], devices[index])._app_handle_login()', source)
+        self.assertLess(source.index('LoginHandler(configs[index]'), source.index("raise RuntimeError(f'角色不符"))
+
 
 if __name__ == '__main__':
     unittest.main()
