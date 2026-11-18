@@ -19,7 +19,8 @@ class FriendScrollTests(unittest.TestCase):
                 patch('tasks.GuildQuickParticipation.friend.RuleOcr', return_value=reader), \
                 patch('tasks.GuildQuickParticipation.friend.name_candidates', side_effect=[[], [(300,400)]]):
             self.assertEqual(find_main_friend(task, object(), 25), [(300,400)])
-        task.device.swipe.assert_called_once()
+        task.device.swipe.assert_called_once_with((350,420), (350,240), duration=.5,
+                                                 control_name='guild_scroll_same_server_friends')
         task.device.click.assert_not_called()
 
     def test_stalled_list_stops_without_selecting_other_friend(self):

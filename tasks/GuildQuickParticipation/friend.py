@@ -73,7 +73,8 @@ def find_main_friend(task, notice, timeout):
             if stalled >= 2 or scrolls >= 8:
                 break
             previous = rows
-            task.device.swipe((350,520), (350,260), duration=.5)
+            task.device.swipe((350,420), (350,240), duration=.5,
+                              control_name='guild_scroll_same_server_friends')
             scrolls += 1
             next_scroll = monotonic() + 1.5
         sleep(.2)
