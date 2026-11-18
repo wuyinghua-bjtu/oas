@@ -40,6 +40,11 @@ def resumable_today(record, today):
             record.get('status') not in ('完成', '完成（有失败）'))
 
 
+def new_guild_batch(record, guild, today):
+    return (record.get('date') != today and guild.get('date') == today
+            and guild.get('status') == '完成')
+
+
 def resumable_post_work(record, now):
     """Continue a recent post-only batch across midnight without replaying battles."""
     if (record.get('status') in ('完成', '完成（有失败）')
@@ -234,9 +239,11 @@ class ScriptTask(TeamTask):
             previous_path = directory / json.loads(pointer.read_text(encoding='utf-8'))['ledger']
             if previous_path.parent == directory and previous_path.exists():
                 old = json.loads(previous_path.read_text(encoding='utf-8'))
+                guild_path = Path('log/GuildQuickParticipation') / self.config.config_name / (today + '.json')
+                guild = json.loads(guild_path.read_text(encoding='utf-8')) if guild_path.exists() else {}
                 # A previous day's ledger is historical evidence, not today's
                 # battle state. Guild work may have switched every character.
-                if (resumable_today(old, today) or resumable_post_work(old, datetime.now()) or
+                if not new_guild_batch(old, guild, today) and (resumable_today(old, today) or resumable_post_work(old, datetime.now()) or
                         (old.get('date') != today and old.get('updated_at', '').startswith(today)
                          and old.get('status') not in ('完成', '完成（有失败）'))):
                     # Continue an active run that actually crossed midnight;
