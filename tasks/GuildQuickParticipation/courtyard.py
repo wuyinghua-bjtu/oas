@@ -123,6 +123,8 @@ def complete_courtyard_affairs(config, device, timeout=90):
             continue
         if complete_clicks>=3:
             remaining=''.join(r.ocr_text for r in guild_reader.detect_and_ocr(device.image)).replace(' ','')
+            if '赠送好友红心' in remaining and '完成' in remaining:
+                return {'complete':False,'reason':'赠送好友红心需额外操作，一键完成后已记录未完成'}
             if '现世逢魔' in remaining and '完成' in remaining:
                 return {'complete':False,'reason':'现世逢魔需额外操作，一键完成后已记录跳过'}
             if '前往' in remaining and '契灵' in remaining:
