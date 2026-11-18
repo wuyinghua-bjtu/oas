@@ -143,7 +143,7 @@ class NormalDevices:
             tabs = [(x + width // 2, y + height // 2)
                     for text, (x, y, width, height) in self.read_name(self.mentor.image)
                     if ''.join(text.split()) == label
-                    and 340 <= x < 780 and 100 <= y < 155]
+                    and 340 <= x < 780 and 85 <= y < 155]
             if len(tabs) != 1:
                 continue
             self.mentor.click(*tabs[0], control_name='mentorship_invite_tab_' + label)
