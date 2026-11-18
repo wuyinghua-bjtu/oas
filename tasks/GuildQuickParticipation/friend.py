@@ -1,6 +1,6 @@
 """Verified friend actions, limited to the named main account."""
 from module.config.local_values import local_text
-from time import monotonic
+from time import monotonic, sleep
 from module.atom.image import RuleImage
 from module.atom.ocr import RuleOcr
 from module.exception import GameStuckError
@@ -36,6 +36,48 @@ def name_candidates(image, box, name=TARGET):
                         int(box[1]+(b[:,1].min()+b[:,1].max())/2)))
     out.sort(key=lambda p:p[1])
     return out
+
+
+def find_main_friend(task, notice, timeout):
+    deadline = monotonic() + timeout
+    expanded = False
+    scrolls = 0
+    stalled = 0
+    previous = None
+    next_scroll = monotonic() + 2
+    while monotonic() < deadline:
+        task.screenshot()
+        if task.appear(notice):
+            task.device.click(1149,91,control_name='guild_close_friend_bond_notice')
+            sleep(.3)
+            continue
+        candidates = name_candidates(task.device.image, (205,190,180,370))
+        if candidates:
+            return candidates
+        header = RuleOcr(roi=(240,150,165,45),area=(240,150,165,45),
+                         mode='Full',method='Default',keyword='',name='guild_friend_group')
+        texts = [row.ocr_text.replace(' ','') for row in header.detect_and_ocr(task.device.image)]
+        if not expanded and any(text.startswith(('好友:', '好友：')) for text in texts):
+            task.device.click(470,174,control_name='guild_expand_same_server_friends')
+            expanded = True
+            next_scroll = monotonic() + 2
+            continue
+        if monotonic() >= next_scroll:
+            reader = RuleOcr(roi=(205,190,180,370),area=(205,190,180,370),
+                             mode='Full',method='Default',keyword='',name='guild_friend_scroll_rows')
+            rows = tuple(row.ocr_text.replace(' ','') for row in reader.detect_and_ocr(task.device.image))
+            if not rows:
+                sleep(.3)
+                continue
+            stalled = stalled + 1 if rows == previous else 0
+            if stalled >= 2 or scrolls >= 8:
+                break
+            previous = rows
+            task.device.swipe((350,520), (350,260), duration=.5)
+            scrolls += 1
+            next_scroll = monotonic() + 1.5
+        sleep(.2)
+    return []
 
 
 def panel_name_confirmed(image, box, name=TARGET):
@@ -78,29 +120,7 @@ def perform_friend_actions(task, timeout=25):
     # The friends page can be visible before its list has finished loading.
     # Wait for the exact target; do not select a different visible friend.
     notice=marker('friend_bond_notice',(466,99,344,67),(450,85,380,95))
-    deadline=monotonic()+timeout
-    candidates=[]
-    expanded=False
-    while monotonic()<deadline:
-        task.screenshot()
-        # The bond-upgrade banner covers the list and clips row suffixes, so
-        # clear it before reading any nickname.
-        if task.appear(notice):
-            task.device.click(1149,91,control_name='guild_close_friend_bond_notice')
-            continue
-        candidates=name_candidates(task.device.image,(205,190,180,370))
-        if candidates:
-            break
-        # A collapsed same-server group leaves only cross-server friends
-        # visible. Expand the independently recognized group header once;
-        # still require the exact main-account name before selecting anyone.
-        if not expanded:
-            header=RuleOcr(roi=(240,150,165,45),area=(240,150,165,45),
-                           mode='Full',method='Default',keyword='',name='guild_friend_group')
-            texts=[r.ocr_text.replace(' ','') for r in header.detect_and_ocr(task.device.image)]
-            if any(text.startswith('好友:') or text.startswith('好友：') for text in texts):
-                task.device.click(470,174,control_name='guild_expand_same_server_friends')
-                expanded=True
+    candidates=find_main_friend(task, notice, timeout)
     if not candidates:
         raise GameStuckError('Main account not uniquely visible in friends list')
     # A portrait or the bond banner can clip the numeric suffix, so several
