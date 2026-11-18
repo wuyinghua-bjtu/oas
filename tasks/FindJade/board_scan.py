@@ -9,7 +9,7 @@ import re
 def completed_shared_card(text):
     text = ''.join(text.split())
     counters = re.findall(r'(\d+)/(\d+)', text)
-    return ('自己击败' in text and '好友击败' in text and '领取' in text
+    return ('好友击败' in text and '领取' in text
             and len(counters) == 2
             and all(int(done) == int(total) and int(total) > 0 for done, total in counters))
 
