@@ -19,6 +19,9 @@ class BondlingNavigationTests(unittest.TestCase):
         cancel = SimpleNamespace(ocr_text='取消')
         reader.return_value.detect_and_ocr.side_effect = [[title], [cancel, confirm]]
         self.assertEqual(bondling_capacity_confirm(None), (715, 435))
+        reader.return_value.detect_and_ocr.side_effect = [
+            [SimpleNamespace(ocr_text='大人尚未选择共鸣的阴阳师，是否继续？')], [cancel, confirm]]
+        self.assertEqual(bondling_capacity_confirm(None), (715, 435))
         for rows in ([confirm], [cancel, confirm, confirm]):
             reader.return_value.detect_and_ocr.side_effect = [[title], rows]
             self.assertIsNone(bondling_capacity_confirm(None))

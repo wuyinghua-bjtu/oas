@@ -37,7 +37,8 @@ def bondling_capacity_confirm(image):
     title = RuleOcr(roi=(420,275,440,75), area=(420,275,440,75), mode='Full',
                     method='Default', keyword='', name='bondling_capacity_dialog')
     words = ''.join(r.ocr_text for r in title.detect_and_ocr(image)).replace(' ', '')
-    if '无法再次获取' not in words or '是否继续' not in words:
+    if ('是否继续' not in words
+            or not any(text in words for text in ('无法再次获取', '尚未选择共鸣的阴阳师'))):
         return None
     buttons = RuleOcr(roi=(425,400,430,85), area=(425,400,430,85), mode='Full',
                       method='Default', keyword='', name='bondling_capacity_buttons')
