@@ -15,7 +15,7 @@ from tasks.BondlingFairyland.assets import BondlingFairylandAssets
 from tasks.BondlingFairyland.battle import BondlingBattle
 from tasks.BondlingFairyland.config import BondlingMode, BondlingClass, BondlingSwitchSoul, BondlingConfig, UserStatus
 from tasks.BondlingFairyland.config_battle import BattleConfig
-from tasks.BondlingFairyland.general_invite import GeneralInvite, bondling_continue_dialog
+from tasks.BondlingFairyland.general_invite import GeneralInvite, bondling_continue_dialog, bondling_capacity_confirm
 from tasks.Component.GeneralBattle.assets import GeneralBattleAssets
 from tasks.Component.GeneralBattle.config_general_battle import GeneralBattleConfig
 from tasks.Component.GeneralRoom.general_room import GeneralRoom
@@ -111,10 +111,19 @@ class ScriptTask(GameUi, GeneralInvite, GeneralRoom, BondlingBattle, SwitchSoul,
         while 1:
             def create_bond_team():
                 click_count = 0
+                capacity_confirms = 0
                 while 1:
                     self.screenshot()
                     if self.appear(self.I_GI_IN_ROOM):
                         return True
+                    capacity_button = bondling_capacity_confirm(self.device.image)
+                    if capacity_button is not None:
+                        if capacity_confirms >= 3:
+                            raise GameStuckError('Bondling capacity dialog did not close after confirmation')
+                        self.device.click(*capacity_button, control_name='bondling_capacity_confirm')
+                        capacity_confirms += 1
+                        sleep(1)
+                        continue
                     # 求援后可能出现式盘数量上限确认弹窗
                     if self.appear_then_click(self.I_UI_CONFIRM, interval=1):
                         sleep(1)

@@ -32,6 +32,25 @@ def bondling_continue_dialog(image):
     return '邀请队友继续' in words and '战斗' in words and '取消' in labels and '确定' in labels
 
 
+def bondling_capacity_confirm(image):
+    """Locate confirmation only on the recognized capacity warning dialog."""
+    title = RuleOcr(roi=(420,275,440,75), area=(420,275,440,75), mode='Full',
+                    method='Default', keyword='', name='bondling_capacity_dialog')
+    words = ''.join(r.ocr_text for r in title.detect_and_ocr(image)).replace(' ', '')
+    if '无法再次获取' not in words or '是否继续' not in words:
+        return None
+    buttons = RuleOcr(roi=(425,400,430,85), area=(425,400,430,85), mode='Full',
+                      method='Default', keyword='', name='bondling_capacity_buttons')
+    rows = buttons.detect_and_ocr(image)
+    confirms = [r for r in rows if ''.join(r.ocr_text.split()) == '确定']
+    if len(confirms) != 1 or not any(''.join(r.ocr_text.split()) == '取消' for r in rows):
+        return None
+    x, y = confirms[0].box.mean(axis=0)
+    if not (0 <= x < 430 and 0 <= y < 85):
+        return None
+    return int(x + 425), int(y + 400)
+
+
 def wind_rain_btwd_candidate(columns):
     """Return one exact name paired with its nearby server, or fail closed."""
     matches = []
