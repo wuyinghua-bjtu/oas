@@ -81,6 +81,18 @@ class InviteLoadingTests(unittest.TestCase):
         task.click.assert_not_called()
 
     @patch('tasks.TripleAwakening.script_task.time.sleep')
+    def test_banner_hidden_tabs_allow_verified_visible_friend(self, sleep):
+        task = self.task()
+        task.I_SELECTED = object()
+        task.appear.return_value = True
+        task.detect_select = Mock(return_value=True)
+        task.click = Mock()
+        self.assertTrue(Participant._invite_without_category_text(task, 'test009', FindMode.AUTO_FIND))
+        task.detect_select.assert_called_once_with('test009')
+        task.appear_then_click.assert_not_called()
+        task.click.assert_called_once_with(task.I_INVITE_ENSURE, interval=1)
+
+    @patch('tasks.TripleAwakening.script_task.time.sleep')
     @patch.object(EvoTask, 'invite_friend', return_value=True)
     def test_waits_for_loaded_labels_and_clicks_only_one_add(self, parent, sleep):
         task = self.task()

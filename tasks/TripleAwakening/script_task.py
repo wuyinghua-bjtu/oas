@@ -203,6 +203,13 @@ class Participant(EvoTask):
         from tasks.Component.GeneralInvite.config_invite import FindMode
         if not name:
             return False
+        self.screenshot()
+        if self.appear(self.I_INVITE_ENSURE) and self.detect_select(name):
+            self.screenshot()
+            if self.appear(self.I_INVITE_ENSURE) and self.appear(self.I_SELECTED):
+                self.click(self.I_INVITE_ENSURE, interval=1)
+                return True
+            return False
         indices = (2,) if find_mode == FindMode.RECENT_FRIEND else (1, 2, 3, 4)
         for index in indices:
             on = getattr(self, f'I_FLAG_{index}_ON')
