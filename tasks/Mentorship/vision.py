@@ -28,6 +28,11 @@ def detect(rgb_image, kind, threshold=0.85):
     if region.shape[0] < template.shape[0] or region.shape[1] < template.shape[1]:
         return None
     score, point = cv2.minMaxLoc(cv2.matchTemplate(region, template, cv2.TM_CCOEFF_NORMED))[1::2]
+    if kind == 'orochi_selected_one' and score < threshold:
+        gray_region = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+        gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        score, point = cv2.minMaxLoc(cv2.matchTemplate(gray_region, gray_template,
+                                                    cv2.TM_CCOEFF_NORMED))[1::2]
     if score < threshold:
         return None
     return (x + point[0], y + point[1], template.shape[1], template.shape[0], score)

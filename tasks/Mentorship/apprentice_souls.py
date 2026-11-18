@@ -162,9 +162,15 @@ def run_apprentice_souls(config, device, rounds=15, day=None, character=local_te
         device.screenshot()
         if not (detect(device.image, 'orochi_selected_one') and task.I_OROCHI_FIRE.match(device.image)):
             raise RuntimeError('未确认退出上次御魂战斗，进度保留待核对')
-        unresolved += 1
-        record.update(pending=False, unresolved_battles=unresolved)
+        if record.get('settlement_won') is True:
+            wins += 1
+            record.update(confirmed_wins=wins, pending=False, settlement_won=False)
+        else:
+            unresolved += 1
+            record.update(pending=False, unresolved_battles=unresolved)
         _save(path, record)
+        if wins == rounds:
+            return wins
     # Keep fighting until `rounds` battles are *confirmed*. An unresolved round
     # stays in the record for audit, but it must not shorten the plan, otherwise
     # a single unreadable result locks the day out of its 15 confirmed wins.
@@ -241,6 +247,8 @@ def run_apprentice_souls(config, device, rounds=15, day=None, character=local_te
             break
         if not won:
             raise RuntimeError('御魂战斗失败，进度标记为待核对')
+        record['settlement_won'] = True
+        _save(path, record)
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             device.screenshot()
@@ -250,7 +258,7 @@ def run_apprentice_souls(config, device, rounds=15, day=None, character=local_te
         else:
             raise RuntimeError('御魂胜利后未确认返回壹层，进度标记为待核对')
         wins += 1
-        record.update(confirmed_wins=wins, pending=False)
+        record.update(confirmed_wins=wins, pending=False, settlement_won=False)
         _save(path, record)
         print(f'APPRENTICE_SOULS_CONFIRMED {wins}/{rounds}', flush=True)
         if wins < safe_limit and assist_verified:
