@@ -138,6 +138,24 @@ class CooperationReport:
             row['last_failure'] = item.get('skip_reason') or ('邀请失败或未选中好友：' + recipient)
         self.flush()
 
+    def reconcile_completed_sender(self, account, items):
+        pending = self.sender_pending(account)
+        completed = [item for item in items if item.get('already_shared') and item.get('completed')]
+        if len(pending) != 1 or len(completed) != 1:
+            return False
+        category = self.category(completed[0])
+        matches = [row for row in self.records.values()
+                   if row['character'] == account.character and row['server'] == account.svr
+                   and (row['category'], row['reward']) == category
+                   and any(event is pending[0] for event in row['invitations'])]
+        if len(matches) != 1:
+            return False
+        pending[0]['sender_completed'] = True
+        pending[0]['sender_completed_at'] = datetime.now().isoformat(timespec='seconds')
+        pending[0]['completion_evidence'] = 'unique_shared_card_claimable_with_completed_counters'
+        self.flush()
+        return True
+
     def sender_pending(self, account):
         return [event for row in self.records.values()
                 if row['character'] == account.character and row['server'] == account.svr

@@ -137,6 +137,7 @@ class ScriptTask(GameUi, FindJadeAssets):
                 account_scanned = True
                 scanned_accounts.add(account_index)
                 self.cooperation_report.account_status(accountInfo, '扫描完成，正在处理协作')
+                self.cooperation_report.reconcile_completed_sender(accountInfo, items)
                 pending = self.cooperation_report.sender_pending(accountInfo)
                 if pending:
                     if not all(event.get('sender_tracked') for event in pending):
