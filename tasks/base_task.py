@@ -265,15 +265,17 @@ class BaseTask(GlobalGameAssets, CostumeBase):
                          keyword='', name='optional_engine_update')
         rows = reader.detect_and_ocr(image)
         text = ''.join(row.ocr_text for row in rows).replace(' ', '')
-        buttons = [row for row in rows if row.ocr_text.replace(' ', '') == '暂不更新']
-        if '引擎' not in text or '后台下载' not in text or len(buttons) != 1:
+        buttons = [row for row in rows if row.ocr_text.replace(' ', '') in ('暂不更新', '下次更新')]
+        optional_download = '引擎' in text and '后台下载' in text
+        ready_update = '已经为您准备好了新版本' in text and '是否立即更新' in text and '立即更新' in text
+        if not (optional_download or ready_update) or len(buttons) != 1:
             return False
         points = buttons[0].box
         x = box[0] + sum(float(p[0]) for p in points) / len(points)
         y = box[1] + sum(float(p[1]) for p in points) / len(points)
         if not (445 <= x <= 620 and 410 <= y <= 475):
             return False
-        logger.info('Dismiss optional engine update with 暂不更新')
+        logger.info('Dismiss optional engine update with %s', buttons[0].ocr_text)
         self.device.click(int(x), int(y), control_name='ENGINE_UPDATE_NOT_NOW')
         sleep(.5)
         self.device.screenshot()
