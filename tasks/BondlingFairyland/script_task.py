@@ -265,7 +265,7 @@ class ScriptTask(GameUi, GeneralInvite, GeneralRoom, BondlingBattle, SwitchSoul,
                 else:
                     break
             # 队长秒开的时候，检测是否进入到战斗中
-            elif self.check_take_over_battle(False, config=self.config.bondling_fairyland.battle_config):
+            elif self.take_over_member_battle():
                 wait_timer.reset()
                 # 进入战斗流程
                 self.device.stuck_record_add('BATTLE_STATUS_S')
@@ -287,6 +287,15 @@ class ScriptTask(GameUi, GeneralInvite, GeneralRoom, BondlingBattle, SwitchSoul,
             self.ui_goto(page_main)
             self.set_next_run(task='BondlingFairyland', finish=True, success=True)
             raise TaskEnd
+
+    def take_over_member_battle(self):
+        """Use bondling settlement handling when the leader starts immediately."""
+        if not self.is_in_battle():
+            return False
+        self.run_battle(self.config.bondling_fairyland.battle_config,
+                        limit_count=self.limit_count)
+        # A failed capture still completed a battle and must reset member wait.
+        return True
 
     def switch_ball(self):
         logger.hr('Start switch ball', 2)

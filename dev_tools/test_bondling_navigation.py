@@ -14,6 +14,28 @@ from tasks.BondlingFairyland.config import BondlingMode
 
 
 class BondlingNavigationTests(unittest.TestCase):
+    def test_fast_member_takeover_uses_bondling_battle_even_on_capture_failure(self):
+        for captured in (False, True):
+            with self.subTest(captured=captured):
+                task = ScriptTask.__new__(ScriptTask)
+                battle_config = object()
+                task.config = SimpleNamespace(bondling_fairyland=SimpleNamespace(
+                    battle_config=battle_config))
+                task.limit_count = 40
+                task.is_in_battle = Mock(return_value=True)
+                task.run_battle = Mock(return_value=captured)
+                task.run_general_battle = Mock()
+                self.assertTrue(task.take_over_member_battle())
+                task.run_battle.assert_called_once_with(battle_config, limit_count=40)
+                task.run_general_battle.assert_not_called()
+
+    def test_fast_member_takeover_does_not_start_from_nonbattle_page(self):
+        task = ScriptTask.__new__(ScriptTask)
+        task.is_in_battle = Mock(return_value=False)
+        task.run_battle = Mock()
+        self.assertFalse(task.take_over_member_battle())
+        task.run_battle.assert_not_called()
+
     @patch('tasks.BondlingFairyland.battle.bondling_continue_dialog', return_value=False)
     def test_battle_returns_on_two_fresh_area_frames(self, dialog):
         task = BondlingBattle.__new__(BondlingBattle)
