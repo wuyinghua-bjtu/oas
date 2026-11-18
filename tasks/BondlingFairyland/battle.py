@@ -10,6 +10,7 @@ from tasks.BondlingFairyland.config import BondlingMode
 from tasks.Component.GeneralBattle.general_battle import GeneralBattle
 from tasks.BondlingFairyland.assets import BondlingFairylandAssets
 from tasks.BondlingFairyland.config_battle import BattleConfig
+from tasks.BondlingFairyland.general_invite import bondling_continue_dialog
 
 from module.logger import logger
 
@@ -96,6 +97,11 @@ class BondlingBattle(GeneralBattle, BondlingFairylandAssets):
                 continue
             if self.appear_then_click(self.I_BATTLE_FAIL, threshold=0.6, interval=1):
                 continue
+            # Settlement may skip the reward screen and show the team prompt.
+            # Leave it to the leader loop instead of waiting for another battle.
+            if bondling_continue_dialog(self.device.image):
+                logger.info('Bondling settlement reached continue invitation dialog; return to leader')
+                return win
             # 如果开启战斗过程随机滑动
             if random_click_swipt_enable:
                 self.random_click_swipt()

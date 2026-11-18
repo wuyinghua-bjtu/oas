@@ -9,9 +9,28 @@ from module.exception import GameStuckError
 from tasks.GameUi.assets import GameUiAssets
 from tasks.BondlingFairyland.script_task import ScriptTask
 from tasks.BondlingFairyland.general_invite import bondling_capacity_confirm
+from tasks.BondlingFairyland.battle import BondlingBattle
+from tasks.BondlingFairyland.config import BondlingMode
 
 
 class BondlingNavigationTests(unittest.TestCase):
+    @patch('tasks.BondlingFairyland.battle.bondling_continue_dialog', return_value=True)
+    def test_battle_returns_to_leader_on_continue_prompt(self, dialog):
+        for captured in (False, True):
+            with self.subTest(captured=captured):
+                task = BondlingBattle.__new__(BondlingBattle)
+                task.config = SimpleNamespace(bondling_fairyland=SimpleNamespace(
+                    bondling_config=SimpleNamespace(bondling_mode=BondlingMode.MODE3)))
+                task.device = Mock()
+                task.screenshot = Mock()
+                task.appear = Mock(return_value=False)
+                task.appear_then_click = Mock(side_effect=lambda rule, **kw:
+                    captured and rule is task.I_CAP_SUCCESS)
+                task.random_click_swipt = Mock()
+                self.assertEqual(task.catch_battle_wait(True), captured)
+                task.screenshot.assert_called_once()
+                task.random_click_swipt.assert_not_called()
+
     @patch('tasks.BondlingFairyland.general_invite.RuleOcr')
     def test_capacity_confirm_requires_warning_and_unique_buttons(self, reader):
         title = SimpleNamespace(ocr_text='无法再次获取，是否继续？')
