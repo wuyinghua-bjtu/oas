@@ -64,12 +64,16 @@ def apply_mentor_soul_preset(config, device):
 
 
 def run_verified_daily(config, mentor, apprentice, name, day=None, apprentice_config=None,
-                       apprentice_server='砂狐乐园'):
+                       apprentice_server='砂狐乐园', activities=None):
     """Run the verified subset. Device ownership must be held by caller."""
     if not name.strip() or not apprentice_server.strip():
         raise RuntimeError('徒弟角色名和服务器不能为空')
     if apprentice_config is None or apprentice_config.config_name != 'oas_leveling':
         raise RuntimeError('未提供已验证的徒弟设备配置')
+    selected_activities = frozenset(('guardian', 'experience', 'gold', 'tako', 'souls')
+                                    if activities is None else activities)
+    if not selected_activities or selected_activities - {'guardian', 'experience', 'gold', 'tako', 'souls'}:
+        raise ValueError('师徒活动范围无效')
     day = day or date.today()
     apply_mentor_soul_preset(config, mentor)
     ui = GameUi(config, mentor)
@@ -89,7 +93,7 @@ def run_verified_daily(config, mentor, apprentice, name, day=None, apprentice_co
     buffs = MasterBuffs(mentor)
 
     _require(go_activity_menu(config, mentor), '未找到妖气探索')
-    remaining = read_remaining(mentor)
+    remaining = read_remaining(mentor) if 'guardian' in selected_activities else 0
     if remaining is None:
         raise RuntimeError('无法确认守护历练剩余次数')
     while remaining:
@@ -101,6 +105,8 @@ def run_verified_daily(config, mentor, apprentice, name, day=None, apprentice_co
         remaining = after
 
     for activity, zone, prefix in (('experience', '经验妖怪', 'exp'), ('gold', '金币妖怪', 'gold')):
+        if activity not in selected_activities:
+            continue
         count = read_normal_remaining(mentor, activity)
         if count is None:
             raise RuntimeError(f'{zone} 剩余次数未确认')
@@ -164,7 +170,7 @@ def run_verified_daily(config, mentor, apprentice, name, day=None, apprentice_co
             _require(type(after) is int and 0 <= after < count, f'{zone} 完成后次数未减少')
             count = after
 
-    if day.weekday() < 5:
+    if 'tako' in selected_activities and day.weekday() < 5:
         stone_counts = [RuleOcr(roi=(720,y,50,27), area=(720,y,50,27),
                                 mode='DigitCounter', method='Default', keyword='',
                                 name='mentorship_stone_remaining_' + str(y)) for y in (198, 222)]
@@ -220,7 +226,8 @@ def run_verified_daily(config, mentor, apprentice, name, day=None, apprentice_co
             after = read_stone_count(apprentice)
             _require(after is not None and 0 <= after < current, '石距完成后次数未减少')
             current = after
-    _require(run_apprentice_souls(apprentice_config, apprentice, day=day,
-                                  character=name, server=apprentice_server) == 15,
-             '徒弟御魂壹层未完成 15 场')
+    if 'souls' in selected_activities:
+        _require(run_apprentice_souls(apprentice_config, apprentice, day=day,
+                                      character=name, server=apprentice_server) == 15,
+                 '徒弟御魂壹层未完成 15 场')
     return True

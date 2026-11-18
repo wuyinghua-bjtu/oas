@@ -28,13 +28,16 @@ from tasks.Restart.login import LoginHandler
 
 
 class ScriptTask(BaseTask):
-    def run(self):
+    def run(self, activities=None):
         if self.config.config_name != 'oas1':
             raise ScriptEnd('师徒任务只支持 oas1')
         directory = Path('log/mentorship/oas1')
         directory.mkdir(parents=True, exist_ok=True)
-        path = directory / (datetime.now().strftime('%Y-%m-%d') + '.json')
+        suffix = '_selected' if activities is not None else ''
+        path = directory / (datetime.now().strftime('%Y-%m-%d') + suffix + '.json')
         state = {'status': '运行中', 'updated_at': datetime.now().isoformat(timespec='seconds')}
+        if activities is not None:
+            state['activities'] = list(activities)
         def save():
             temp = path.with_suffix('.tmp')
             temp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -105,7 +108,8 @@ class ScriptTask(BaseTask):
                     devices[index].save_screenshot(genre='mentorship_identity_unrecognized', interval=0)
                     raise RuntimeError(f'角色不符：预期 {expected}，实际 {actual}')
             run_verified_daily(configs[0], devices[0], devices[1], apprentice_name,
-                               apprentice_config=configs[1], apprentice_server=apprentice_server)
+                               apprentice_config=configs[1], apprentice_server=apprentice_server,
+                               activities=activities)
             state.update(status='完成', updated_at=datetime.now().isoformat(timespec='seconds'))
             save()
         except NoAssistShikigami as error:
@@ -124,6 +128,8 @@ class ScriptTask(BaseTask):
         finally:
             for device, original in guarded:
                 device.screenshot = original
+        if activities is not None:
+            raise TaskEnd('Mentorship')
         now = datetime.now()
         target = (now + timedelta(days=1)).replace(hour=0, minute=30, second=0, microsecond=0)
         self.set_next_run('Mentorship', server=False, finish=True, target=target)
