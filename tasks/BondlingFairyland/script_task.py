@@ -69,7 +69,9 @@ class ScriptTask(GameUi, GeneralInvite, GeneralRoom, BondlingBattle, SwitchSoul,
         logger.hr('第二步, 切换御魂', 2)
         self.switch_soul()
         logger.hr('第三步, 前往契灵主界面', 2)
-        self.ui_goto_page(page_bondling_fairyland)
+        self.ui_get_current_page()
+        if not self.ui_goto(page_bondling_fairyland):
+            raise GameStuckError('Failed to enter bondling fairyland before battle preparation')
         logger.hr('第四步, 开始战斗准备', 2)
         self.current_count = 0
         self.limit_count = cong.bondling_config.limit_count  # 默认limit_count值

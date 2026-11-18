@@ -51,7 +51,7 @@ class GameUiAssets:
 	# description 
 	# 探索页改为以底栏「妖气探索」白色文字为锚点：2026-11 版本改版后，旧锚点(681,12)的「突破」金字标签消失；
 	# 底栏位置固定且白字为无彩色，不受截图/模板 RGBA 通道顺序影响，实测探索页 0.996~1.00、庭院 0.43、御魂页 0.47。
-	I_CHECK_EXPLORATION = RuleImage(roi_front=(233,691,54,24), roi_back=(30,620,470,100), threshold=0.7, method="Template matching", file="./tasks/GameUi/page/page_check_exploration.png")
+	I_CHECK_EXPLORATION = RuleImage(roi_front=(233,691,54,24), roi_back=(30,620,1240,100), threshold=0.7, method="Template matching", file="./tasks/GameUi/page/page_check_exploration.png")
 	# 探索前往觉醒 
 	I_EXPLORATION_GOTO_AWAKE_ZONE = RuleImage(roi_front=(65,632,50,41), roi_back=(33,619,1125,98), threshold=0.65, method="Template matching", file="./tasks/GameUi/page/page_exploration_goto_awake_zone.png")
 	# 探索前往御魂 
