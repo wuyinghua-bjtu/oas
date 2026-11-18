@@ -3,6 +3,15 @@ from module.config.local_values import local_text
 from tasks.FindJade.black_gold import *
 from module.atom.click import RuleClick
 from time import sleep
+import re
+
+
+def completed_shared_card(text):
+    text = ''.join(text.split())
+    counters = re.findall(r'(\d+)/(\d+)', text)
+    return ('自己击败' in text and '好友击败' in text and '领取' in text
+            and len(counters) == 2
+            and all(int(done) == int(total) and int(total) > 0 for done, total in counters))
 
 def read_cooperation_info(self,inspect_realworld=False):
     if not getattr(self,'black_gold_skin',False):
@@ -40,7 +49,11 @@ def read_cooperation_info(self,inspect_realworld=False):
                 claimreader=RuleOcr(roi=claimbox,area=claimbox,mode='Full',method='Default',keyword='',
                                     name=f'blackgold_claim_check_{n+1}')
                 claimtext=''.join(x.ocr_text for x in claimreader.detect_and_ocr(self.device.image)).replace(' ','')
-                if '自己击败' in identity and '好友击败' in identity and '领取' in claimtext:
+                fullbox = (90+282*n,330,265,205)
+                fullreader = RuleOcr(roi=fullbox,area=fullbox,mode='Full',method='Default',keyword='',
+                                     name=f'blackgold_completed_card_{n+1}')
+                fulltext = ''.join(row.ocr_text for row in fullreader.detect_and_ocr(self.device.image))
+                if completed_shared_card(fulltext) or ('自己击败' in identity and '好友击败' in identity and '领取' in claimtext):
                     already_shared=True
                     completed=True
                     button=None
