@@ -14,6 +14,20 @@ from tasks.BondlingFairyland.config import BondlingMode
 
 
 class BondlingNavigationTests(unittest.TestCase):
+    @patch('tasks.BondlingFairyland.battle.bondling_continue_dialog', return_value=False)
+    def test_battle_returns_on_two_fresh_area_frames(self, dialog):
+        task = BondlingBattle.__new__(BondlingBattle)
+        task.config = SimpleNamespace(bondling_fairyland=SimpleNamespace(
+            bondling_config=SimpleNamespace(bondling_mode=BondlingMode.MODE2)))
+        task.device = Mock()
+        task.screenshot = Mock()
+        task.appear_then_click = Mock(return_value=False)
+        task.appear = Mock(side_effect=lambda rule, **kw: rule is task.I_BALL_AREA)
+        task.random_click_swipt = Mock()
+        self.assertFalse(task.catch_battle_wait(True))
+        self.assertEqual(task.screenshot.call_count, 2)
+        task.random_click_swipt.assert_not_called()
+
     @patch('tasks.BondlingFairyland.battle.bondling_continue_dialog', return_value=True)
     def test_battle_returns_to_leader_on_continue_prompt(self, dialog):
         for captured in (False, True):

@@ -11,6 +11,7 @@ from tasks.Component.GeneralBattle.general_battle import GeneralBattle
 from tasks.BondlingFairyland.assets import BondlingFairylandAssets
 from tasks.BondlingFairyland.config_battle import BattleConfig
 from tasks.BondlingFairyland.general_invite import bondling_continue_dialog
+from tasks.Component.GeneralInvite.assets import GeneralInviteAssets
 
 from module.logger import logger
 
@@ -102,6 +103,14 @@ class BondlingBattle(GeneralBattle, BondlingFairylandAssets):
             if bondling_continue_dialog(self.device.image):
                 logger.info('Bondling settlement reached continue invitation dialog; return to leader')
                 return win
+            # Members return directly to the area or room after settlement.
+            # Require two fresh matching frames before leaving battle wait.
+            return_rules = (self.I_BALL_AREA, self.I_BALL_HELP, GeneralInviteAssets.I_GI_IN_ROOM)
+            if not self.appear(self.I_EXIT) and any(self.appear(rule) for rule in return_rules):
+                self.screenshot()
+                if not self.appear(self.I_EXIT) and any(self.appear(rule) for rule in return_rules):
+                    logger.info('Bondling settlement returned to area or room; resume invitations')
+                    return win
             # 如果开启战斗过程随机滑动
             if random_click_swipt_enable:
                 self.random_click_swipt()
