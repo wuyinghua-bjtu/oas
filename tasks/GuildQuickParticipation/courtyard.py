@@ -14,6 +14,14 @@ from tasks.GuildQuickParticipation.kirin import COURTYARD_GUILD
 def affairs_page_visible(task):
     if task.appear(LoginHandler.I_PAGE):
         return True
+    tabs = RuleOcr(roi=(1120,120,130,200), area=(1120,120,130,200), mode='Full',
+                   method='Default', keyword='', name='guild_courtyard_tabs')
+    labels = ''.join(row.ocr_text for row in tabs.detect_and_ocr(task.device.image)).replace(' ', '')
+    if '日常' in labels and '特殊' in labels:
+        shrine = RuleOcr(roi=(0,600,250,110), area=(0,600,250,110), mode='Full',
+                         method='Default', keyword='', name='guild_courtyard_shrine')
+        if '纸人神社' in ''.join(row.ocr_text for row in shrine.detect_and_ocr(task.device.image)):
+            return True
     reader = RuleOcr(roi=(300,110,805,125), area=(300,110,805,125), mode='Full',
                      method='Default', keyword='', name='guild_courtyard_page')
     text = ''.join(row.ocr_text for row in reader.detect_and_ocr(task.device.image)).replace(' ', '')
@@ -74,6 +82,7 @@ def complete_courtyard_affairs(config, device, timeout=90):
                                         timeout=5, scale_range=(0.8, 1.2)):
         handler.screenshot()
         if not affairs_page_visible(handler):
+            device.save_screenshot(genre='guild_courtyard_entry_unconfirmed', interval=0)
             raise GameStuckError('Courtyard affairs page could not be confirmed')
     deadline = monotonic() + timeout
     complete_clicks = 0
