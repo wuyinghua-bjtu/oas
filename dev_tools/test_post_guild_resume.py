@@ -17,6 +17,7 @@ class PostGuildResumeTests(unittest.TestCase):
         task.device.app_is_running.return_value = False
         task.appear.return_value = True
         with patch('tasks.Restart.login.LoginHandler') as login, \
+                patch('tasks.GroupedAwakening.post_guild._words', return_value=''), \
                 patch('tasks.GroupedAwakening.post_guild.dismiss_received_fragment', return_value=False), \
                 patch('tasks.GroupedAwakening.post_guild.dismiss_new_server_promotion', return_value=False):
             return_to_courtyard(task)

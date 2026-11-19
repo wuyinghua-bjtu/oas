@@ -266,6 +266,12 @@ def return_to_courtyard(task, account=None):
         LoginHandler(config=task.config, device=task.device)._app_handle_login()
     for _ in range(16):
         task.screenshot()
+        fortune = _words(task, (450,100,340,445))
+        if '累计奖励' in fortune and re.search(r'第\d+签', fortune):
+            task.device.click(640,690,control_name='post_close_daily_fortune')
+            task.device.stuck_record_clear()
+            time.sleep(1)
+            continue
         if dismiss_received_fragment(task):
             time.sleep(1)
             continue
