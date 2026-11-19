@@ -424,6 +424,16 @@ class ScriptTask(TeamTask):
                             raise GameStuckError('结算恢复时窗口绑定变化：' + group[idx])
                         participant.expected_name = group[idx]
                         participant.step('恢复结算', 300)
+                        if (pending.get('won', {}).get(WINDOWS[idx]) is True
+                                and not pending.get('settled', {}).get(WINDOWS[idx])):
+                            participant.screenshot()
+                            if participant.appear(participant.I_CHECK_LOGIN_FORM):
+                                if not FindJadeTask.switch_support_account(participant, accounts[group[idx]]):
+                                    raise GameStuckError('已有胜利证据后的登录恢复失败：' + group[idx])
+                                if participant.nickname() != group[idx]:
+                                    raise BattleRecoveryUnsafe('登录恢复后角色不符：' + group[idx])
+                                pending['settled'][WINDOWS[idx]] = True
+                                save()
                     entry['recovery_identity_required'] = True
                     save()
                     battle_players = [active[2], active[0], active[1]] if group_index == 3 else active

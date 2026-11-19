@@ -88,6 +88,15 @@ class DevicePreflightTests(unittest.TestCase):
         self.assertEqual(task.wait_room.call_count, 2)
         self.assertEqual(task.invite_with_refresh.call_count, 1)
 
+    def test_login_settlement_requires_persisted_win_and_identity(self):
+        branches = [node for node in ast.walk(self.tree) if isinstance(node, ast.If)
+                    and "pending.get('won', {}).get(WINDOWS[idx]) is True" in ast.unparse(node.test)]
+        self.assertEqual(len(branches), 1)
+        branch = ast.unparse(branches[0])
+        self.assertIn('I_CHECK_LOGIN_FORM', branch)
+        self.assertIn('participant.nickname() != group[idx]', branch)
+        self.assertIn("pending['settled'][WINDOWS[idx]] = True", branch)
+
 
 if __name__ == '__main__':
     unittest.main()
