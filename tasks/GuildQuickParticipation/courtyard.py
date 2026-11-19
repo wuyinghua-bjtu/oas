@@ -14,7 +14,7 @@ from tasks.GuildQuickParticipation.kirin import COURTYARD_GUILD
 def affairs_page_visible(task):
     if task.appear(LoginHandler.I_PAGE):
         return True
-    tabs = RuleOcr(roi=(1120,120,130,200), area=(1120,120,130,200), mode='Full',
+    tabs = RuleOcr(roi=(1100,90,180,300), area=(1100,90,180,300), mode='Full',
                    method='Default', keyword='', name='guild_courtyard_tabs')
     labels = ''.join(row.ocr_text for row in tabs.detect_and_ocr(task.device.image)).replace(' ', '')
     if '日常' in labels and '特殊' in labels:
