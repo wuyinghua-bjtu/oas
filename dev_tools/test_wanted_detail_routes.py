@@ -40,7 +40,8 @@ class WantedDetailRoutesTests(unittest.TestCase):
 
     def test_recorded_route_types(self):
         for text, expected in (('式神石', '式神'), ('|探索', '探索'), ('｜ 探索 ', '探索'),
-                               ('闻', '秘闻'), ('挑战', '式神'), ('秘闻', '秘闻')):
+                               ('闻', '秘闻'), ('挑战', '式神'), ('秘闻', '秘闻'),
+                               ('［探索', '探索'), ('探探索', '探索')):
             with self.subTest(text=text):
                 self.assertEqual(normalize_wanted_route_type(text), expected)
 
@@ -69,11 +70,11 @@ class WantedDetailRoutesTests(unittest.TestCase):
             costume_config=SimpleNamespace(costume_main_type=None))))
         task.device = SimpleNamespace(image=None, save_screenshot=Mock())
         task.__dict__['TEMPLATE_GIF'] = Mock()
-        task.__dict__['_match_end'] = Mock(stable=Mock(return_value=False))
+        task.__dict__['_match_end'] = Mock(stable=Mock(return_value=True))
         task.screenshot = Mock()
         task.appear = Mock(side_effect=lambda image: image is task.I_UI_BACK_YELLOW or image is task.I_E_EXPLORATION_CLICK)
         task.get_current_scene = Mock(return_value=Scene.MAIN)
-        task.swipe = Mock(return_value=True)
+        task.swipe = Mock(return_value=None)
         task.quit_explore = Mock()
         task.fire = Mock()
         with patch('tasks.WantedQuests.explore.Timer') as timer:

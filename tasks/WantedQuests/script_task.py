@@ -57,7 +57,9 @@ def parse_wanted_route(text):
 
 
 def normalize_wanted_route_type(text):
-    text = re.sub(r'[\s|｜]', '', text)
+    text = re.sub(r'[\s|｜\[\]［］]', '', text)
+    if text == '探探索':
+        return '探索'
     return {'式神石': '式神', '挑战': '式神', '闻': '秘闻'}.get(text, text)
 
 

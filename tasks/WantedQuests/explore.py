@@ -103,15 +103,15 @@ class WQExplore(BaseExploration, HighLight):
                 # 向后拉,寻找怪
                 if search_fail_timer.reached():
                     search_fail_timer.reset()
-                    if search_swipes >= 6 or self._match_end.stable(self.device.image, refresh_after_stable=True):
+                    if search_swipes >= 6:
                         empty_sweeps += 1
                         logger.warning('未识别到悬赏高亮目标，退出并排除此探索路线，已滑屏 %s 次', search_swipes)
                         self.device.save_screenshot(genre='findjade_highlight_missing', interval=0)
                         self.quit_explore()
                         raise ExploreWantedBoss
-                    if self.swipe(self.S_SWIPE_BACKGROUND_RIGHT, interval=3):
-                        search_swipes += 1
-                        continue
+                    self.swipe(self.S_SWIPE_BACKGROUND_RIGHT)
+                    search_swipes += 1
+                    continue
                 if not search_fail_timer.started():
                     search_fail_timer.start()
             elif scene == Scene.BATTLE_PREPARE:
