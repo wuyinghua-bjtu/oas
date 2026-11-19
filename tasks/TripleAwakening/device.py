@@ -34,8 +34,10 @@ class TeamDevice(Device):
         vm = args[args.index('--vm') + 1]
         if vm != self.config.script.device.emulatorinfo_name:
             raise RequestHumanTakeover('Team VM does not match configured device')
-        rect = win32gui.GetClientRect(render)
-        if tuple(rect) != (0, 0, 1280, 720):
+        for attempt in range(3):
+            rect = win32gui.GetClientRect(render)
+            if tuple(rect) == (0, 0, 1280, 720):
+                break
             width, height = rect[2], rect[3]
             # MuMu may shrink an otherwise identical 16:9 render during
             # a transition. Restore it after verifying the window and process.
@@ -49,7 +51,11 @@ class TeamDevice(Device):
                                       win32con.SWP_NOMOVE | win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
                 time.sleep(.5)
             if tuple(win32gui.GetClientRect(render)) != (0, 0, 1280, 720):
-                raise RequestHumanTakeover(info['name'] + ': keep render size 1280x720')
+                if attempt == 2:
+                    actual = win32gui.GetClientRect(render)
+                    raise RequestHumanTakeover(info['name'] + ': keep render size 1280x720, actual=' + str(actual))
+            else:
+                break
         binding = (pid, process.create_time(), root, render)
         if self.binding is not None and binding != self.binding:
             raise RequestHumanTakeover('Team window replaced during task')
