@@ -35,6 +35,26 @@ from tasks.GameUi.page import page_awake_zones, page_exploration
 from tasks.Mentorship.apprentice_souls import _assist_card
 
 
+class TeamDevicesUnavailable(GameStuckError):
+    pass
+
+
+def require_team_devices(inventory, titles):
+    devices = []
+    unavailable = []
+    for title in titles:
+        matches = [info for info in inventory.values() if info.get('name') == title]
+        if len(matches) != 1:
+            unavailable.append(title + ' 缺失或名称重复')
+        elif not matches[0].get('is_android_started'):
+            unavailable.append(title + ' 未运行')
+        else:
+            devices.append(matches[0])
+    if unavailable:
+        raise TeamDevicesUnavailable('组队设备不可用：' + '；'.join(unavailable))
+    return devices
+
+
 def resumable_today(record, today):
     return (record.get('date') == today and
             record.get('status') not in ('完成', '完成（有失败）'))
@@ -303,12 +323,9 @@ class ScriptTask(TeamTask):
             # Post-guild work needs only the primary window once all teams
             # have finished; do not require the two battle-only emulators.
             needed_windows = WINDOWS if any(g['completed'] < 15 and g.get('status') != '失败' for g in record['groups']) else WINDOWS[:1]
-            for index, title in enumerate(needed_windows):
-                matches = [v for v in inventory.values() if v.get('name') == title]
-                if len(matches) != 1 or not matches[0].get('is_android_started'):
-                    raise GameStuckError(title + ' 未开机或名称重复')
+            available_devices = require_team_devices(inventory, needed_windows)
+            for index, (title, info) in enumerate(zip(needed_windows, available_devices)):
                 keep_team_window_on_screen(title)
-                info = matches[0]
                 team_infos.append(info)
                 conf = object.__new__(type(self.config))
                 conf.__dict__.update(self.config.__dict__)
@@ -654,6 +671,12 @@ class ScriptTask(TeamTask):
             record['status'] = '出错'
             record['failure'] = {'group': None if group_index is None else group_index+1,
                                  'stage': stage, 'reason': str(error) or type(error).__name__}
+            if isinstance(error, TeamDevicesUnavailable):
+                record['status'] = '等待设备'
+                self.config.model.grouped_awakening.scheduler.enable = False
+                self.config.save()
+                save()
+                raise TaskEnd('分组觉醒等待指定设备，保留进度并暂停重复重试：' + str(error)) from error
             if type(error).__name__ == 'PostGuildSubmissionUncertain':
                 record['status'] = '待核对'
                 self.config.model.grouped_awakening.scheduler.enable = False
