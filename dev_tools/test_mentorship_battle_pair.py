@@ -55,6 +55,16 @@ class PairBattleTests(unittest.TestCase):
         side.device.image = {'I_CHECK_MAIN'}
         self.assertTrue(pair._advance(side))
 
+    def test_reward_without_previous_victory_is_settled(self):
+        pair = PairBattle(Device(), Device())
+        side = pair.apprentice
+        side.device.image = {'I_REWARD'}
+        self.assertFalse(pair._advance(side))
+        self.assertTrue(side.win_seen)
+        self.assertEqual(side.device.clicks, [(1060, 560)])
+        side.device.image = {'I_CHECK_MAIN'}
+        self.assertTrue(pair._advance(side))
+
     def test_guardian_prompt_is_cancelled_before_master_return(self):
         pair = PairBattle(Device(), Device())
         side = pair.mentor

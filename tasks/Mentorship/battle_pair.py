@@ -104,8 +104,8 @@ class PairBattle:
             return False
         if (Battle.I_REWARD.match(frame) or Battle.I_REWARD_GOLD.match(frame)
                 or Battle.I_REWARD_STATISTICS.match(frame)):
-            if side.win_seen:
-                self._click(side, 1060, 560, 'mentorship_reward')
+            side.win_seen = True
+            self._click(side, 1060, 560, 'mentorship_reward')
             return False
         if side.win_seen and not (guardian and side is self.mentor) and (Game.I_CHECK_MAIN.match(frame) or Game.I_CHECK_TEAM.match(frame) or Game.I_CHECK_EXPLORATION.match(frame)
                               or (not guardian and Invite.I_GI_SURE.match(frame))):
@@ -117,6 +117,7 @@ class PairBattle:
         deadline = time.monotonic() + timeout
         devices = (self.mentor.device, self.apprentice.device)
         for device in devices:
+            device.stuck_record_clear()
             device.click_record_clear()
             device.stuck_record_add('BATTLE_STATUS_S')
         try:
