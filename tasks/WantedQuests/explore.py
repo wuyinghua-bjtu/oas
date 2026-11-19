@@ -4,8 +4,10 @@ from module.atom.animate import RuleAnimate
 from module.atom.image import RuleImage
 from module.base.timer import Timer
 from module.logger import logger
+from module.exception import GameStuckError
 from tasks.Exploration.base import BaseExploration, Scene
 from tasks.Exploration.version import HighLight
+from tasks.GameUi.page import page_exploration
 
 
 class ExploreWantedBoss(Exception):
@@ -104,6 +106,16 @@ class WQExplore(BaseExploration, HighLight):
                 if search_fail_timer.reached():
                     search_fail_timer.reset()
                     if search_swipes >= 6:
+                        if not explore_only_boss:
+                            self.quit_explore()
+                            self.screenshot()
+                            if self.appear(self.I_E_EXPLORATION_CLICK):
+                                self.ui_click_until_disappear(self.I_UI_BACK_YELLOW)
+                            self.ui_get_current_page(skip_first_screenshot=False)
+                            if not self.ui_goto(page_exploration):
+                                raise GameStuckError('Cannot verify world after bounty battles')
+                            logger.info('探索战斗已结算，返回核对实际悬赏进度')
+                            return
                         empty_sweeps += 1
                         logger.warning('未识别到悬赏高亮目标，退出并排除此探索路线，已滑屏 %s 次', search_swipes)
                         self.device.save_screenshot(genre='findjade_highlight_missing', interval=0)

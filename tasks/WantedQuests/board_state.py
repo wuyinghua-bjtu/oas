@@ -81,3 +81,13 @@ def sealed_page_is_last(rgb_image):
         and all(_score(image, (x, 320, 100, 115), 'wq_sealed_footer.png') >= .88
                 for x in (175, 445, 715, 985))
     )
+
+
+def board_page_has_next(rgb_image):
+    if not isinstance(rgb_image, np.ndarray) or rgb_image.shape[:2] != (720, 1280):
+        return False
+    image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
+    return (
+        _score(image, (545, 20, 190, 70), 'wq_board_header_sealed.png') >= .9
+        and _score(image, (1160, 330, 100, 80), 'wq_page_next_sealed.png') >= .88
+    )

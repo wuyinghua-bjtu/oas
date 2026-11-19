@@ -32,20 +32,24 @@ class WantedBoardStateTests(unittest.TestCase):
         self.assertFalse(sealed_page_has_next(None))
 
     def test_sealed_page_is_turned_before_trace(self):
-        device = SimpleNamespace(image=self.image, click=Mock())
+        device = SimpleNamespace(image=self.image, click=Mock(), swipe=Mock())
         task = SimpleNamespace(device=device, special_main=False,
                                ui_get_current_page=Mock(), ui_goto=Mock(), screenshot=Mock(),
                                appear_then_click=Mock(return_value=False),
                                appear_then_click_multi_scale=Mock(return_value=False),
+                               ui_reward_appear_click=Mock(return_value=False),
                                ui_click_until_disappear=Mock())
         for name in ('I_TRACE_DISABLE', 'I_TRACE_DISABLE_CURRENT', 'I_WQ_SEAL', 'I_WQ_DONE',
                      'I_TRACE_ENABLE', 'I_TRACE_ENABLE_CURRENT', 'I_UI_BACK_RED',
+                     'I_DETAIL_TRACED_CURRENT',
                      'I_WQ_INVITE_1', 'I_WQ_INVITE_2', 'I_WQ_INVITE_3'):
             setattr(task, name, name)
-        task.appear = Mock(side_effect=lambda asset: asset == 'I_TRACE_DISABLE' and device.click.called)
-        with patch('tasks.WantedQuests.script_task.sleep'):
+        task.appear = Mock(side_effect=lambda asset: asset == 'I_TRACE_DISABLE' and device.swipe.called)
+        with patch('tasks.WantedQuests.script_task.sleep'), \
+             patch('tasks.WantedQuests.script_task.board_state.board_page_has_next', return_value=False):
             self.assertTrue(ScriptTask.pre_work(task))
-        device.click.assert_called_once_with(1215, 372, control_name='wanted_board_next_page')
+        device.swipe.assert_called_once_with((1080, 370), (380, 370), duration=.8,
+                                             control_name='wanted_board_next_page')
 
 
 if __name__ == '__main__':

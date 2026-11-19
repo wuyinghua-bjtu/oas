@@ -85,6 +85,31 @@ class WantedDetailRoutesTests(unittest.TestCase):
         task.quit_explore.assert_called_once()
         task.fire.assert_not_called()
 
+    def test_successful_sweep_returns_to_verify_progress(self):
+        task = object.__new__(WQExplore)
+        task.config = SimpleNamespace(model=SimpleNamespace(global_game=SimpleNamespace(
+            costume_config=SimpleNamespace(costume_main_type=None))))
+        task.device = SimpleNamespace(image=None, save_screenshot=Mock())
+        task.__dict__['TEMPLATE_GIF'] = Mock()
+        task.screenshot = Mock()
+        target = task.TEMPLATE_GIF
+        matched = iter([True] + [False] * 8)
+        task.appear = Mock(side_effect=lambda asset: next(matched) if asset is target else
+                           asset is task.I_UI_BACK_YELLOW or asset is task.I_E_EXPLORATION_CLICK)
+        task.get_current_scene = Mock(return_value=Scene.MAIN)
+        task.swipe = Mock(return_value=None)
+        task.quit_explore = Mock()
+        task.fire = Mock(return_value=True)
+        task.ui_get_current_page = Mock()
+        task.ui_click_until_disappear = Mock()
+        task.ui_goto = Mock(return_value=True)
+        task.minions_cnt = 1
+        with patch('tasks.WantedQuests.explore.Timer') as timer:
+            timer.return_value.reached.return_value = True
+            task.explore(Mock(), 4)
+        task.quit_explore.assert_called_once()
+        task.ui_goto.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main()

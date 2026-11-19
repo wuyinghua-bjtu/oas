@@ -125,6 +125,7 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
     def complete_traced_quests(self, strict=False):
         """Complete the currently traced tasks, keeping sender work isolated."""
         self._wanted_clue_skipped = False
+        self._wanted_blocked_rows = []
         self.screenshot()
         number_challenge = self.O_WQ_NUMBER.ocr(self.device.image)
         error_count = 0
@@ -135,7 +136,7 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
                 logger.info("no more wq remained")
                 if strict and not saw_progress:
                     raise GameStuckError('Cannot confirm tracked sender quests; no progress visible')
-                return True
+                return not self._wanted_blocked_rows
             if self.appear(self.I_WQ_BOX):
                 logger.info("get reward")
                 self.ui_get_reward(self.I_WQ_BOX)
@@ -156,7 +157,7 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
                 if strict and getattr(self, '_wanted_clue_skipped', False):
                     raise GameStuckError('存在跳过的线索悬赏，无法确认追踪任务全部完成')
                 logger.info("only completed wanted quests remained")
-                return True
+                return not self._wanted_blocked_rows
             if re == -1:
                 error_count += 1
                 # 没找到任务 尝试上滑
@@ -169,7 +170,12 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
             self.O_WQ_TEXT_ALL.area = area
             result = self.execute_mission(self.O_WQ_TEXT_ALL, total - cu, number_challenge)
             if result is False:
-                return False
+                self._wanted_blocked_rows.append(area[1] + area[3] / 2)
+                logger.warning('当前悬赏路线暂不可用，保留未完成状态，继续其他悬赏')
+                self.ui_click_until_disappear(self.I_UI_BACK_RED)
+                self.ui_get_current_page(skip_first_screenshot=False)
+                if not self.ui_goto(page_exploration):
+                    return False
             sleep(1.5)
 
 
@@ -211,8 +217,15 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
         前置工作，
         :return:
         """
-        self.ui_get_current_page()
-        self.ui_goto(page_main)
+        self._wanted_board_complete = False
+        self.screenshot()
+        board_visible = any(self.appear(asset) for asset in (
+            self.I_TRACE_DISABLE, self.I_TRACE_DISABLE_CURRENT,
+            self.I_TRACE_ENABLE, self.I_TRACE_ENABLE_CURRENT, self.I_DETAIL_TRACED_CURRENT))
+        if not board_visible:
+            self.ui_get_current_page()
+            if not self.ui_goto(page_main):
+                return False
         done_timer = Timer(15)
         sealed_pages_turned = 0
         last_page_turn = 0.0
@@ -240,6 +253,18 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
                 continue
             reward_clicks = 0
             if self.appear(self.I_TRACE_DISABLE) or self.appear(self.I_TRACE_DISABLE_CURRENT):
+                if board_state.board_page_has_next(self.device.image):
+                    if sealed_pages_turned >= 5:
+                        return False
+                    if monotonic() - last_page_turn >= 3:
+                        self.device.swipe((1080, 370), (380, 370), duration=.8,
+                                          control_name='wanted_board_next_page')
+                        sealed_pages_turned += 1
+                        last_page_turn = monotonic()
+                        done_timer.reset()
+                        sleep(1)
+                    continue
+                self._wanted_board_complete = sealed_page_is_last(self.device.image)
                 break
             if self.appear_then_click(self.I_WQ_SEAL, interval=1):
                 continue
@@ -249,7 +274,8 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
                 continue
             if self.appear_then_click(self.I_TRACE_ENABLE_CURRENT, interval=1):
                 continue
-            if sealed_pages_turned and sealed_page_is_last(self.device.image):
+            if sealed_page_is_last(self.device.image):
+                self._wanted_board_complete = True
                 logger.info('末页悬赏均已封印，检查已追踪任务')
                 break
             if sealed_page_has_next(self.device.image):
@@ -492,6 +518,7 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
             OCR_WQ_TYPE = [RuleOcr(roi=(636,y,73,35), area=(636,y,73,35), mode='Single', method='Default', keyword='', name=f'wq_new_type_{i}') for i,y in enumerate(CURRENT_DETAIL_ROWS, 1)]
             OCR_WQ_INFO = [RuleOcr(roi=(716,y,315,38), area=(716,y,315,38), mode='Single', method='Default', keyword='', name=f'wq_new_info_{i}') for i,y in enumerate(CURRENT_DETAIL_ROWS, 1)]
             GOTO_BUTTON = current_detail_goto_buttons()
+            logger.info('Recognized current bounty detail')
         if not any(self.appear(button) for button in GOTO_BUTTON):
             # 如果没有出现 '前往'按钮， 那就是这个可能是神秘任务但是没有解锁
             logger.warning('悬赏详情未识别到前往按钮，不能据此确认任务未解锁')
@@ -503,6 +530,9 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
             return False
         # 跳过不想打的
         monster_name = (RuleOcr(roi=(635,155,320,55), area=(635,155,320,55), mode='Single', method='Default', keyword='', name='wq_new_monster').ocr_single(self.device.image) if current_detail else self.O_WQ_MONSTER_TYPE.detect_text(self.device.image))
+        if getattr(self, '_wanted_route_owner', None) != monster_name:
+            self.want_strategy_excluding = []
+            self._wanted_route_owner = monster_name
         if any(name and name in monster_name for name in self.unwanted_boss_name_list):
             #
             logger.warning(f'unwanted {monster_name}')
@@ -517,7 +547,8 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
             info_wq = extract_info(i)
             if info_wq:
                 info_wq_list.append(info_wq)
-        info_wq_list = [item for item in info_wq_list if item not in self.want_strategy_excluding
+        excluded_routes = {(item[5], item[1]) for item in self.want_strategy_excluding}
+        info_wq_list = [item for item in info_wq_list if (item[5], item[1]) not in excluded_routes
                         and (item[5], item[1]) not in getattr(self, '_secret_speed_excluded', set())]
         if not info_wq_list:
             logger.warning('No wanted quests can be challenged')
@@ -1043,6 +1074,10 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
                     # 该任务已完成，一般是悬赏任务，邀请人没有做导致的
                     completed_only = True
                     continue
+                if any(abs(xywh[1] + xywh[3] / 2 - row) < 25
+                       for row in getattr(self, '_wanted_blocked_rows', [])):
+                    completed_only = True
+                    continue
                 return cu, re, total, xywh
             # 例如：1414 66 1212
             if reg_XX.match(res.ocr_text):
@@ -1073,9 +1108,18 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
                 return True
         if not self.ui_page_appear(page_exploration):
             raise GameStuckError('无法确认探索地图，不能根据空侧栏判断悬赏完成')
-        logger.info('No bounty labels or bounty rewards found in three sidebar frames')
+        logger.warning('追踪侧栏没有悬赏文字，无法区分收起和完成；重新检查悬赏板')
         self.device.save_screenshot(genre='findjade_no_bounty_sidebar', interval=0)
-        return False
+        if not self.pre_work():
+            raise GameStuckError('悬赏追踪侧栏缺失，重新检查悬赏板失败，任务未确认完成')
+        if getattr(self, '_wanted_board_complete', False):
+            return False
+        self.screenshot()
+        results = self.O_WQ_WANTED.detect_and_ocr(self.device.image)
+        if any('悬赏' in ''.join(item.ocr_text.split()) or
+               '封印' in ''.join(item.ocr_text.split()) for item in results):
+            return True
+        raise GameStuckError('悬赏板检查后仍无追踪进度，不能确认悬赏完成')
 
 
 
