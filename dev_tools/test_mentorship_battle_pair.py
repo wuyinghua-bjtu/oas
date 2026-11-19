@@ -12,6 +12,10 @@ class Device:
 class PairBattleTests(unittest.TestCase):
     def setUp(self):
         self.patches = []
+        reader_patch = patch('tasks.Mentorship.battle_pair.RuleOcr')
+        self.reader = reader_patch.start()
+        self.reader.return_value.detect_and_ocr.return_value = []
+        self.patches.append(reader_patch)
         for owner, names in ((Battle, ('I_FALSE', 'I_EXIT_ENSURE', 'I_EXIT', 'I_PREPARE_HIGHLIGHT',
                                       'I_WIN', 'I_DE_WIN', 'I_REWARD', 'I_REWARD_GOLD', 'I_REWARD_STATISTICS')),
                              (Game, ('I_CHECK_MAIN', 'I_CHECK_TEAM')), (Invite, ('I_GI_SURE',)),
@@ -64,6 +68,23 @@ class PairBattleTests(unittest.TestCase):
         self.assertEqual(side.device.clicks, [(1060, 560)])
         side.device.image = {'I_CHECK_MAIN'}
         self.assertTrue(pair._advance(side))
+
+    def test_finished_side_is_not_captured_again(self):
+        from unittest.mock import Mock
+        pair = PairBattle(Mock(), Device())
+        pair.mentor.returned = True
+        self.assertTrue(pair._advance(pair.mentor))
+        pair.mentor.device.screenshot.assert_not_called()
+
+    def test_guardian_experience_results_are_dismissed(self):
+        from types import SimpleNamespace
+        pair = PairBattle(Device(), Device())
+        self.reader.return_value.detect_and_ocr.return_value = [
+            SimpleNamespace(ocr_text='EXP+15000 EXP+30000 EXP+30000 点击屏幕继续')]
+        with patch('tasks.Mentorship.battle_pair.detect', return_value=None):
+            self.assertFalse(pair._advance(pair.apprentice, guardian=True))
+        self.assertTrue(pair.apprentice.win_seen)
+        self.assertEqual(pair.apprentice.device.clicks, [(640, 695)])
 
     def test_guardian_prompt_is_cancelled_before_master_return(self):
         pair = PairBattle(Device(), Device())
