@@ -542,6 +542,11 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
         except ExploreWantedBoss:
             logger.warning('No confirmed bounty target on exploration route; exclude it and try another route')
             self.want_strategy_excluding.append(info_wq_list[0])
+            self.ui_get_current_page(skip_first_screenshot=False)
+            if not self.ui_goto(page_exploration):
+                raise GameStuckError('Cannot return to exploration world after excluding bounty route')
+            if not self.pre_work():
+                return False
 
     def challenge(self, goto_btn, num):
         self.ui_click(goto_btn, self.I_WQC_FIRE)

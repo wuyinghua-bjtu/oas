@@ -59,7 +59,6 @@ class WQExplore(BaseExploration, HighLight):
                 if hasattr(self, 'support_account'):
                     self.device.save_screenshot(genre='findjade_explore_entrance', interval=0)
                 self.ui_click(self.I_E_EXPLORATION_CLICK, stop=self.I_E_SETTINGS_BUTTON)
-                search_swipes = 0
                 search_fail_timer.reset()
                 continue
             # 探索大世界
