@@ -98,6 +98,14 @@ def complete_courtyard_affairs(config, device, timeout=90):
                          mode='Full',method='Default',keyword='',name='guild_courtyard_manual_task')
     while monotonic() < deadline:
         handler.screenshot()
+        fortune = RuleOcr(roi=(450,100,340,445), area=(450,100,340,445), mode='Full',
+                          method='Default', keyword='', name='guild_daily_fortune')
+        text = ''.join(row.ocr_text for row in fortune.detect_and_ocr(device.image)).replace(' ', '')
+        if '累计奖励' in text and re.search(r'第\d+签', text):
+            device.click(1000,550,control_name='guild_daily_fortune_close')
+            device.stuck_record_clear()
+            sleep(.5)
+            continue
         if daily_selected and complete_clicks>=1:
             button=device.image[625:670,1135:1200,:3].astype('float32')
             disabled=(button.max(axis=2)-button.min(axis=2)).mean()<90
