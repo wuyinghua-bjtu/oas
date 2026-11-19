@@ -2,7 +2,7 @@
 from time import monotonic
 from module.exception import GameStuckError
 from module.atom.ocr import RuleOcr
-from tasks.GuildQuickParticipation.reward import image, claim_reward
+from tasks.GuildQuickParticipation.reward import image, claim_reward, MISSION
 
 COURTYARD_GUILD=image('courtyard_guild',(552,615,58,63),(535,600,95,95))
 GUILD_HUNT=image('guild_hunt',(12,250,93,31),(0,225,230,110))
@@ -45,6 +45,8 @@ def no_assist_dialog(task):
 
 
 def guild_activity_board(task):
+    if task.appear(MISSION):
+        return False
     if '集体任务' not in _words(task, (140,150,230,80)):
         words = _words(task, (100,90,1000,560))
         return ('集体任务' in words and '全天开放' in words
@@ -54,6 +56,8 @@ def guild_activity_board(task):
 
 
 def guild_activity_home(task):
+    if task.appear(MISSION):
+        return False
     return ((task.appear(GUILD_HUNT) and task.appear(GUILD_TASK))
             or guild_activity_board(task))
 
@@ -73,6 +77,13 @@ def open_guild(task, timeout=30):
     clicks = 0
     while monotonic() < deadline:
         task.screenshot()
+        if task.appear(MISSION):
+            if clicks < 4 and monotonic() >= next_click:
+                task.device.click(1168,120,control_name='guild_tasks_back')
+                clicks += 1
+                next_click = monotonic() + 2
+            sleep(.3)
+            continue
         if guild_activity_home(task):
             return
         if clicks >= 4 or monotonic() < next_click:
@@ -92,6 +103,8 @@ def open_guild(task, timeout=30):
 
 
 def open_hunt_entry(task):
+    if task.appear(MISSION):
+        return False
     # The old hunt label also matches the new board's collective-task row.
     # Confirm the board before consulting that legacy template, including
     # the observed OCR variant of 狩猎战.
@@ -108,11 +121,16 @@ def open_hunt_entry(task):
             return True
         return False
     if task.appear(GUILD_HUNT):
-        # A template alone also matches the collective-task artwork.
-        if '狩猎战' not in _words(task, (0,225,230,110)):
+        box = (0,225,230,110)
+        rule = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                       keyword='', name='guild_hunt_entry')
+        matches = [row for row in rule.detect_and_ocr(task.device.image)
+                   if '狩猎战' in row.ocr_text.replace(' ', '')]
+        if len(matches) != 1:
             return False
-        x,y,w,h=GUILD_HUNT.roi_front
-        task.device.click(210,y+h//2+30,control_name='guild_open_hunting')
+        points = matches[0].box
+        center_y = box[1] + sum(float(point[1]) for point in points) / len(points)
+        task.device.click(210,int(center_y),control_name='guild_open_hunting')
         return True
     return False
 

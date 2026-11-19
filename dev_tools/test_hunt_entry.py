@@ -4,7 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from tasks.GuildQuickParticipation.kirin import GUILD_HUNT, open_hunt_entry, guild_activity_board
+from tasks.GuildQuickParticipation.kirin import GUILD_HUNT, open_hunt_entry, guild_activity_board, guild_activity_home, open_guild
+from tasks.GuildQuickParticipation.reward import MISSION
 
 
 class HuntEntryTest(unittest.TestCase):
@@ -17,15 +18,19 @@ class HuntEntryTest(unittest.TestCase):
         self.assertTrue(open_hunt_entry(self.task))
         self.task.device.click.assert_called_once_with(
             260, 500, control_name='guild_open_hunting_board')
-        self.task.appear.assert_not_called()
+        self.task.appear.assert_called_once_with(MISSION)
 
-    @patch('tasks.GuildQuickParticipation.kirin._words', side_effect=['', '', '狩猎战'])
-    def test_legacy_sidebar_still_opens(self, board):
-        self.task.appear.return_value = True
+    @patch('tasks.GuildQuickParticipation.kirin.RuleOcr')
+    @patch('tasks.GuildQuickParticipation.kirin._words', side_effect=['', ''])
+    def test_legacy_sidebar_still_opens(self, board, reader):
+        self.task.appear.side_effect = lambda image: image is GUILD_HUNT
+        self.task.device.image = None
+        reader.return_value.detect_and_ocr.return_value = [
+            SimpleNamespace(ocr_text='狩猎战', box=[(10,25),(100,25),(100,45),(10,45)])]
         self.assertTrue(open_hunt_entry(self.task))
-        self.task.appear.assert_called_once_with(GUILD_HUNT)
+        self.assertEqual(self.task.appear.call_args_list[-1].args, (GUILD_HUNT,))
         self.task.device.click.assert_called_once_with(
-            210, GUILD_HUNT.roi_front[1] + GUILD_HUNT.roi_front[3] // 2 + 30,
+            210, 260,
             control_name='guild_open_hunting')
 
     @patch('tasks.GuildQuickParticipation.kirin._words', return_value='')
@@ -42,10 +47,29 @@ class HuntEntryTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
     def test_weekend_board_is_recognized(self):
+        self.task.appear.return_value = False
         for label in ('狩猎战', '阴界之门'):
             with self.subTest(label=label), patch(
                     'tasks.GuildQuickParticipation.kirin._words', side_effect=['集体任务', label]):
                 self.assertTrue(guild_activity_board(self.task))
+
+    def test_collective_description_is_not_an_activity_entry(self):
+        self.task.appear.side_effect = lambda image: image is MISSION
+        with patch('tasks.GuildQuickParticipation.kirin._words') as reader:
+            self.assertFalse(open_hunt_entry(self.task))
+            self.assertFalse(guild_activity_board(self.task))
+            self.assertFalse(guild_activity_home(self.task))
+            reader.assert_not_called()
+        self.task.device.click.assert_not_called()
+
+    def test_open_guild_closes_collective_modal_before_confirming_home(self):
+        self.task.screenshot = Mock()
+        self.task.appear.side_effect = [True, False]
+        with patch('tasks.GuildQuickParticipation.kirin.guild_activity_home', return_value=True), \
+                patch('time.sleep'):
+            open_guild(self.task)
+        self.task.device.click.assert_called_once_with(
+            1168, 120, control_name='guild_tasks_back')
 
     def test_hunt_opens_guild_before_day_branch(self):
         source = Path(__file__).resolve().parents[1] / 'tasks/Hunt/script_task.py'
