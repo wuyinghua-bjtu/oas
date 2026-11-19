@@ -578,12 +578,27 @@ class ScriptTask(EvoTask):
             time.sleep(.3)
 
     @staticmethod
+    def courtyard_settlement_visible(player):
+        menu_box = (450, 655, 380, 60)
+        menu = RuleOcr(roi=menu_box, area=menu_box, mode='Full', method='Default',
+                       keyword='', name='triple_settled_menu')
+        labels = ''.join(row.ocr_text for row in menu.detect_and_ocr(player.device.image)).replace(' ', '')
+        if not all(label in labels for label in ('组队', '阴阳寮', '商店')):
+            return False
+        name_box = (110, 20, 225, 45)
+        name = RuleOcr(roi=name_box, area=name_box, mode='Full', method='Default',
+                       keyword='', name='triple_settled_name')
+        return any(row.ocr_text.replace(' ', '') == player.expected_name
+                   for row in name.detect_and_ocr(player.device.image))
+
+    @staticmethod
     def battle(players, final, record, save):
         pending = record.get('pending_round', {})
         windows = [p.device.config.script.device.handle for p in players]
         won = [bool(pending.get('won', {}).get(w, False)) for w in windows]
         settled = [bool(pending.get('settled', {}).get(w, False)) for w in windows]
         exploration_frames = [0] * len(players)
+        courtyard_frames = [0] * len(players)
         while not all(settled):
             for index,p in enumerate(players):
                 if settled[index]:
@@ -639,6 +654,10 @@ class ScriptTask(EvoTask):
                     name_ocr=RuleOcr(roi=(125,25,150,32),area=(125,25,150,32),mode='Single',
                                      method='Default',keyword='',name='triple_settled_character')
                     returned=name_ocr.ocr(p.device.image).replace(' ','') == (p.expected_name or EXPECTED_NAMES[index])
+                if won[index] and index > 0 and not returned:
+                    courtyard = ScriptTask.courtyard_settlement_visible(p)
+                    courtyard_frames[index] = courtyard_frames[index] + 1 if courtyard else 0
+                    returned = courtyard_frames[index] >= 2
                 if won[index] and index > 0 and not returned:
                     exploration=RuleOcr(roi=(100,610,180,105),area=(100,610,180,105),
                                         mode='Full',method='Default',keyword='',name='triple_exploration_settled')

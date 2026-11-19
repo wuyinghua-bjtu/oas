@@ -60,6 +60,17 @@ class SettlementRecoveryTests(unittest.TestCase):
         self.assertFalse(record['pending_round']['won']['leader'])
         leader.click.assert_not_called()
 
+    def test_courtyard_requires_menu_and_exact_name(self):
+        player = Mock(expected_name='刘士根006')
+        rows = lambda text: [SimpleNamespace(ocr_text=text)]
+        with patch('tasks.TripleAwakening.script_task.RuleOcr') as ocr:
+            ocr.return_value.detect_and_ocr.side_effect = [rows('组队 阴阳寮 商店'), rows('刘士根006')]
+            self.assertTrue(ScriptTask.courtyard_settlement_visible(player))
+            ocr.return_value.detect_and_ocr.side_effect = [rows('组队 阴阳寮 商店'), rows('刘士根005')]
+            self.assertFalse(ScriptTask.courtyard_settlement_visible(player))
+            ocr.return_value.detect_and_ocr.side_effect = [rows('组队 商店')]
+            self.assertFalse(ScriptTask.courtyard_settlement_visible(player))
+
 
 if __name__ == '__main__':
     unittest.main()
