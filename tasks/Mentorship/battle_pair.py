@@ -24,10 +24,12 @@ def clear_verified_statistics(device, apprentice_name, timeout=12):
     while time.monotonic() < deadline:
         device.screenshot()
         frame = device.image
-        if not (Experience.I_EXP_WIN.match(frame) or Gold.I_GOLD_WIN.match(frame)):
-            return handled
         words = ''.join(x.ocr_text for x in footer.detect_and_ocr(frame)).replace(' ', '')
         identities = ''.join(x.ocr_text for x in names.detect_and_ocr(frame)).replace(' ', '')
+        if not (Experience.I_EXP_WIN.match(frame) or Gold.I_GOLD_WIN.match(frame)
+                or ('点击空白区域继续' in words and local_text('LOCAL_SUPPORT_') in identities
+                    and apprentice_name in identities)):
+            return handled
         if '点击空白区域继续' not in words or local_text('LOCAL_SUPPORT_') not in identities or apprentice_name not in identities:
             raise RuntimeError('师徒结算页身份或继续提示未确认')
         if time.monotonic() - last_click >= 1.5:
@@ -84,6 +86,11 @@ class PairBattle:
             reader = RuleOcr(roi=(80, 200, 1120, 515), area=(80, 200, 1120, 515),
                              mode='Full', method='Default', keyword='', name='guardian_settlement')
             words = ''.join(row.ocr_text for row in reader.detect_and_ocr(frame)).replace(' ', '')
+            if ('点击空白区域继续' in words and '伤害排名' in words
+                    and ('获得经验' in words or '获得金币' in words)):
+                side.win_seen = True
+                self._click(side, 640, 695, 'mentorship_statistics_continue', interval=1.5)
+                return False
             if '点击屏幕继续' in words and words.upper().count('EXP') >= 3:
                 side.win_seen = True
                 self._click(side, 640, 695, 'mentorship_result_continue', interval=1.5)
