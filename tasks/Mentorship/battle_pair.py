@@ -83,7 +83,7 @@ class PairBattle:
         if Battle.I_FALSE.match(frame):
             raise RuntimeError('师徒副本战斗失败')
         if not stone_leader:
-            reader = RuleOcr(roi=(80, 200, 1120, 515), area=(80, 200, 1120, 515),
+            reader = RuleOcr(roi=(80, 120, 1120, 595), area=(80, 120, 1120, 595),
                              mode='Full', method='Default', keyword='', name='guardian_settlement')
             words = ''.join(row.ocr_text for row in reader.detect_and_ocr(frame)).replace(' ', '')
             if ('点击空白区域继续' in words and '伤害排名' in words
