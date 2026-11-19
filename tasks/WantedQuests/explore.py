@@ -29,6 +29,7 @@ class WQExplore(BaseExploration, HighLight):
         _cnt_exploration = 0
         search_fail_cnt = 0
         empty_sweeps = 0
+        search_swipes = 0
         search_fail_timer = Timer(3.2)  # 这里设置的时间一定要大于S_SWIPE_BACKGROUND_RIGHT滑动的时间
         # https://github.com/runhey/OnmyojiAutoScript/pull/1697 云景阆苑 皮肤
         from tasks.Component.Costume.config import MainType
@@ -58,6 +59,8 @@ class WQExplore(BaseExploration, HighLight):
                 if hasattr(self, 'support_account'):
                     self.device.save_screenshot(genre='findjade_explore_entrance', interval=0)
                 self.ui_click(self.I_E_EXPLORATION_CLICK, stop=self.I_E_SETTINGS_BUTTON)
+                search_swipes = 0
+                search_fail_timer.reset()
                 continue
             # 探索大世界
             elif scene == Scene.WORLD:
@@ -95,22 +98,20 @@ class WQExplore(BaseExploration, HighLight):
                 if self.appear(self.TEMPLATE_GIF) and self.fire(self.TEMPLATE_GIF):
                     explore_only_boss = False
                     empty_sweeps = 0
+                    search_swipes = 0
                     logger.info(f'Fight highlighted bounty target, minions cnt {self.minions_cnt}')
                     continue
                 # 向后拉,寻找怪
                 if search_fail_timer.reached():
                     search_fail_timer.reset()
-                    if self._match_end.stable(self.device.image, refresh_after_stable=True):
+                    if search_swipes >= 6 or self._match_end.stable(self.device.image, refresh_after_stable=True):
                         empty_sweeps += 1
-                        logger.warning('未识别到悬赏高亮目标，退出重打进图，连续第 %s 次', empty_sweeps)
+                        logger.warning('未识别到悬赏高亮目标，退出并排除此探索路线，已滑屏 %s 次', search_swipes)
                         self.device.save_screenshot(genre='findjade_highlight_missing', interval=0)
-                        if empty_sweeps >= 3:
-                            self.quit_explore()
-                            raise ExploreWantedBoss
-                        _cnt_exploration += 1
                         self.quit_explore()
-                        continue
+                        raise ExploreWantedBoss
                     if self.swipe(self.S_SWIPE_BACKGROUND_RIGHT, interval=3):
+                        search_swipes += 1
                         continue
                 if not search_fail_timer.started():
                     search_fail_timer.start()

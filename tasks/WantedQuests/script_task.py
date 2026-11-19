@@ -540,7 +540,7 @@ class ScriptTask(WQExplore, SecretScriptTask, WantedQuestsAssets):
             self._secret_speed_excluded.add((info_wq_list[0][5], info_wq_list[0][1]))
             self.recover_secret_speed()
         except ExploreWantedBoss:
-            logger.warning('The extreme case. The quest only needs to challenge one final boss, so skip it')
+            logger.warning('No confirmed bounty target on exploration route; exclude it and try another route')
             self.want_strategy_excluding.append(info_wq_list[0])
 
     def challenge(self, goto_btn, num):

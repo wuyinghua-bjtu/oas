@@ -1,4 +1,9 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+from tasks.WantedQuests.explore import WQExplore, ExploreWantedBoss
+from tasks.Exploration.base import Scene
 
 from tasks.WantedQuests.script_task import current_detail_goto_buttons, normalize_wanted_route_type, parse_wanted_route
 
@@ -57,6 +62,27 @@ class WantedDetailRoutesTests(unittest.TestCase):
         for destination in ('第二十五章', '海怪的温柔·肆'):
             with self.subTest(destination=destination):
                 self.assertEqual(parse_wanted_route(f'{destination}(数量:3)'), (destination, 3))
+
+    def test_missing_highlight_stops_before_click_guard(self):
+        task = object.__new__(WQExplore)
+        task.config = SimpleNamespace(model=SimpleNamespace(global_game=SimpleNamespace(
+            costume_config=SimpleNamespace(costume_main_type=None))))
+        task.device = SimpleNamespace(image=None, save_screenshot=Mock())
+        task.__dict__['TEMPLATE_GIF'] = Mock()
+        task.__dict__['_match_end'] = Mock(stable=Mock(return_value=False))
+        task.screenshot = Mock()
+        task.appear = Mock(side_effect=lambda image: image is task.I_UI_BACK_YELLOW or image is task.I_E_EXPLORATION_CLICK)
+        task.get_current_scene = Mock(return_value=Scene.MAIN)
+        task.swipe = Mock(return_value=True)
+        task.quit_explore = Mock()
+        task.fire = Mock()
+        with patch('tasks.WantedQuests.explore.Timer') as timer:
+            timer.return_value.reached.return_value = True
+            with self.assertRaises(ExploreWantedBoss):
+                task.explore(Mock(), 4)
+        self.assertEqual(task.swipe.call_count, 6)
+        task.quit_explore.assert_called_once()
+        task.fire.assert_not_called()
 
 
 if __name__ == '__main__':
