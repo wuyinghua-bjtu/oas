@@ -583,15 +583,17 @@ class ScriptTask(EvoTask):
         menu = RuleOcr(roi=menu_box, area=menu_box, mode='Full', method='Default',
                        keyword='', name='triple_settled_menu')
         labels = ''.join(row.ocr_text for row in menu.detect_and_ocr(player.device.image)).replace(' ', '')
-        if not all(label in labels for label in ('组队', '阴阳寮', '商店')):
-            if player.appear(player.I_MAIN_SCROLL_CLOSE):
-                player.device.click(1200, 650, control_name='triple_settled_expand_menu')
-            return False
         name_box = (110, 20, 225, 45)
         name = RuleOcr(roi=name_box, area=name_box, mode='Full', method='Default',
                        keyword='', name='triple_settled_name')
-        return any(row.ocr_text.replace(' ', '') == player.expected_name
-                   for row in name.detect_and_ocr(player.device.image))
+        identity = any(row.ocr_text.replace(' ', '') == player.expected_name
+                       for row in name.detect_and_ocr(player.device.image))
+        if not all(label in labels for label in ('组队', '阴阳寮', '商店')):
+            if identity and time.monotonic() - getattr(player, '_settled_menu_open_at', 0) > 3:
+                player.device.click(1200, 650, control_name='triple_settled_expand_menu')
+                player._settled_menu_open_at = time.monotonic()
+            return False
+        return identity
 
     @staticmethod
     def battle(players, final, record, save):

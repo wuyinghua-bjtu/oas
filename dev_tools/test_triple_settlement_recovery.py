@@ -68,7 +68,7 @@ class SettlementRecoveryTests(unittest.TestCase):
             self.assertTrue(ScriptTask.courtyard_settlement_visible(player))
             ocr.return_value.detect_and_ocr.side_effect = [rows('组队 阴阳寮 商店'), rows('刘士根005')]
             self.assertFalse(ScriptTask.courtyard_settlement_visible(player))
-            ocr.return_value.detect_and_ocr.side_effect = [rows('组队 商店')]
+            ocr.return_value.detect_and_ocr.side_effect = [rows('组队 商店'), rows('other')]
             self.assertFalse(ScriptTask.courtyard_settlement_visible(player))
 
 
