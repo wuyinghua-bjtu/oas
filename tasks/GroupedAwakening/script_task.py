@@ -428,8 +428,24 @@ class ScriptTask(TeamTask):
                                 and not pending.get('settled', {}).get(WINDOWS[idx])):
                             participant.screenshot()
                             if participant.appear(participant.I_CHECK_LOGIN_FORM):
-                                if not FindJadeTask.switch_support_account(participant, accounts[group[idx]]):
+                                from tasks.Restart.assets import RestartAssets
+                                deadline = time.monotonic() + 90
+                                while time.monotonic() < deadline:
+                                    participant.screenshot()
+                                    name_box = (110, 20, 225, 45)
+                                    reader = RuleOcr(roi=name_box, area=name_box, mode='Full', method='Default',
+                                                     keyword='', name='group_won_login_identity')
+                                    names = [row.ocr_text.replace(' ', '') for row in reader.detect_and_ocr(participant.device.image)]
+                                    if group[idx] in names:
+                                        break
+                                    if participant.appear(RestartAssets.I_LOGIN_ENTER_GAME):
+                                        participant.click(RestartAssets.I_LOGIN_ENTER_GAME, interval=3)
+                                    time.sleep(1)
+                                else:
                                     raise GameStuckError('已有胜利证据后的登录恢复失败：' + group[idx])
+                                if participant.appear(participant.I_MAIN_SCROLL_CLOSE):
+                                    participant.device.click(1200, 650, control_name='group_won_expand_menu')
+                                    time.sleep(1)
                                 if participant.nickname() != group[idx]:
                                     raise BattleRecoveryUnsafe('登录恢复后角色不符：' + group[idx])
                                 pending['settled'][WINDOWS[idx]] = True

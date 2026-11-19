@@ -584,6 +584,8 @@ class ScriptTask(EvoTask):
                        keyword='', name='triple_settled_menu')
         labels = ''.join(row.ocr_text for row in menu.detect_and_ocr(player.device.image)).replace(' ', '')
         if not all(label in labels for label in ('组队', '阴阳寮', '商店')):
+            if player.appear(player.I_MAIN_SCROLL_CLOSE):
+                player.device.click(1200, 650, control_name='triple_settled_expand_menu')
             return False
         name_box = (110, 20, 225, 45)
         name = RuleOcr(roi=name_box, area=name_box, mode='Full', method='Default',
@@ -646,6 +648,11 @@ class ScriptTask(EvoTask):
                         # and settlement plus the leader's post-battle prompt.
                         won[index] = True
                 returned=False
+                if (won[index] and index == 0
+                        and record.get('login_reward_evidence', {}).get('round') == record.get('active_round')):
+                    courtyard = ScriptTask.courtyard_settlement_visible(p)
+                    courtyard_frames[index] = courtyard_frames[index] + 1 if courtyard else 0
+                    returned = courtyard_frames[index] >= 2
                 if won[index] and p.is_in_room():
                     room_ocr=RuleOcr(roi=(80,0,270,90),area=(80,0,270,90),mode='Full',
                                      method='Default',keyword='',name='triple_room_confirm')
