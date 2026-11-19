@@ -107,6 +107,7 @@ class ScriptTask(GameUi, FindJadeAssets):
                 self.cooperation_report.account_status(account, '尚未扫描')
         logger.info('Full cooperation scan begins: %s support accounts; real-world quests are recorded only', len(accounts))
         for account_index, accountInfo in enumerate(accounts, 1):
+            self.cooperation_report.restore_assist_deferred(accountInfo)
             previous = self.cooperation_report.accounts.get(self.cooperation_report.account_key(accountInfo), {})
             deferred = self.cooperation_report.sender_pending(accountInfo)
             if deferred and all(event.get('sender_deferred') for event in deferred):

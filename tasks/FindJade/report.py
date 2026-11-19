@@ -156,6 +156,21 @@ class CooperationReport:
         self.flush()
         return True
 
+    def restore_assist_deferred(self, account):
+        restored = False
+        for event in self.sender_pending(account):
+            reason = event.get('sender_deferred_reason', '')
+            if event.get('sender_deferred') and reason.startswith((
+                    '首次好友协战未上阵确认：', '首次协战准备页未确认，',
+                    '首次协战准备已错过，')):
+                event['assist_deferred_recovery_reason'] = reason
+                event.pop('sender_deferred', None)
+                event.pop('sender_deferred_reason', None)
+                restored = True
+        if restored:
+            self.flush()
+        return restored
+
     def sender_pending(self, account):
         return [event for row in self.records.values()
                 if row['character'] == account.character and row['server'] == account.svr

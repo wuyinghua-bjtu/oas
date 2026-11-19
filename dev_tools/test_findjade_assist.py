@@ -37,16 +37,14 @@ class AssistCycleTests(unittest.TestCase):
             task.device.swipe.assert_not_called()
 
     def test_same_character_other_server_does_not_share_cache(self):
-        from tasks.FindJade.WantedQuestsEx import SenderBattleFailed
         with tempfile.TemporaryDirectory() as folder:
             self.cache(self.task(folder))
             task = self.task(folder, server='区服乙')
             task.is_in_real_battle.return_value = True
             from tasks.Component.GeneralBattle.general_battle import GeneralBattle
             with patch.object(GeneralBattle, 'battle_wait', return_value=True) as finish:
-                with self.assertRaises(SenderBattleFailed):
-                    ensure_sender_assist(task)
-            finish.assert_called_once_with(task, False)
+                ensure_sender_assist(task)
+            finish.assert_not_called()
             task.screenshot.assert_called_once()
 
     def test_old_period_is_not_reused(self):
@@ -74,20 +72,22 @@ class AssistCycleTests(unittest.TestCase):
             self.assertEqual(prepare_mock.call_count, 1)
             second.screenshot.assert_not_called()
 
-    def test_failed_confirmation_never_sets_success_or_runs_normal_preparation(self):
+    def test_failed_confirmation_continues_without_false_success(self):
         from tasks.GroupedAwakening.script_task import ScriptTask as GroupTask
-        from tasks.FindJade.WantedQuestsEx import SenderBattleFailed
         from tasks.Component.GeneralBattle.general_battle import GeneralBattle
         with tempfile.TemporaryDirectory() as folder:
             task = self.task(folder)
             with patch.object(GroupTask, 'prepare_assists') as prepare, \
                     patch.object(GeneralBattle, 'battle_before') as normal:
-                with self.assertRaises(SenderBattleFailed):
-                    sender_battle_before(task, None, 'config')
-            normal.assert_not_called()
+                sender_battle_before(task, None, 'config')
+            normal.assert_called_once_with(task, None, 'config', timeout=45)
             path = next(Path(folder).glob('assist-*.json'))
             data = json.loads(path.read_text(encoding='utf-8'))
             self.assertFalse(data['accounts'][CooperationReport.account_key(task.support_account)]['verified'])
+            self.assertTrue(data['accounts'][CooperationReport.account_key(task.support_account)]['attempted'])
+            second = self.task(folder)
+            ensure_sender_assist(second)
+            second.screenshot.assert_not_called()
 
     def test_low_chapter_route_is_preferred_with_same_type_priority(self):
         from tasks.FindJade.WantedQuestsEx import sender_routes
