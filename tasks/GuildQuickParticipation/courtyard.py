@@ -75,6 +75,7 @@ def complete_courtyard_affairs(config, device, timeout=90):
     A timeout or unrecognized page leaves the account unfinished.
     """
     handler = LoginHandler(config=config, device=device)
+    device.stuck_record_clear()
     navigation = GameUi(config=config, device=device)
     navigation.ui_get_current_page()
     navigation.ui_goto(page_main)
@@ -85,6 +86,7 @@ def complete_courtyard_affairs(config, device, timeout=90):
             device.save_screenshot(genre='guild_courtyard_entry_unconfirmed', interval=0)
             raise GameStuckError('Courtyard affairs page could not be confirmed')
     deadline = monotonic() + timeout
+    device.stuck_record_clear()
     complete_clicks = 0
     daily_selected = False
     blocked_since = None

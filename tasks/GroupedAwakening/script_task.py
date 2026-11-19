@@ -713,7 +713,13 @@ class ScriptTask(TeamTask):
             # Reload at this boundary, after battles, to pick up post-work fixes.
             import importlib
             from tasks.GroupedAwakening import post_guild
-            importlib.reload(post_guild).finish_all(players[0], self.config, record['date'])
+            primary_settings = players[0].device.config.script.device
+            original_control = primary_settings.control_method
+            try:
+                primary_settings.control_method = 'ADB'
+                importlib.reload(post_guild).finish_all(players[0], self.config, record['date'])
+            finally:
+                primary_settings.control_method = original_control
             record['status'] = '完成（有失败）' if any(g.get('status') == '失败' for g in record['groups']) else '完成'
         except Exception as error:
             logger.exception(error)

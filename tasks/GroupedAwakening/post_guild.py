@@ -257,6 +257,7 @@ def collective_missions_visible(task):
 
 def return_to_courtyard(task, account=None):
     task.step('寮任务后返回庭院', 90)
+    task.device.stuck_record_clear()
     if not task.device.app_is_running():
         # A previous bounded recovery can stop the game just before the worker
         # is replaced. Start only the game inside the existing emulator.
