@@ -33,6 +33,22 @@ class SwitchSoul(BaseTask, SwitchSoulAssets):
         threshold=0.85, method='Template matching',
         file='./tasks/Component/SwitchSoul/ss/ss_sou_already_equipped_stacked.png')
 
+    def dismiss_optional_audio_download(self):
+        box = (400, 170, 480, 350)
+        reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                         keyword='', name='soul_optional_audio')
+        rows = reader.detect_and_ocr(self.device.image)
+        text = ''.join(row.ocr_text for row in rows)
+        cancel = [row for row in rows if row.ocr_text.strip() == '取消']
+        if '式神音频' not in text or '后台下载' not in text or len(cancel) != 1:
+            return False
+        points = cancel[0].box
+        self.device.click(int(box[0] + points[:, 0].mean()),
+                          int(box[1] + points[:, 1].mean()),
+                          control_name='soul_optional_audio_cancel')
+        sleep(.5)
+        return True
+
     def goto_shikigami_records(self, button):
         """
         进入式神录
@@ -79,8 +95,14 @@ class SwitchSoul(BaseTask, SwitchSoulAssets):
         :return:
         """
         deadline = Timer(15).start()
+        audio_checked = False
         while 1:
             self.screenshot()
+            if not audio_checked:
+                audio_checked = True
+                if self.dismiss_optional_audio_download():
+                    deadline.reset()
+                    continue
             if deadline.reached():
                 raise GameStuckError('Cannot recognize soul preset panel')
             if self.appear(self.I_SOU_SWITCH_1):
