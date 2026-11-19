@@ -33,6 +33,10 @@ class RenderRestoreTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.run_restore([(0, 0, 1279, 719)] * 7)
 
+    def test_one_pixel_overshoot_is_corrected(self):
+        gui = self.run_restore([(0, 0, 1281, 721), (0, 0, 1280, 720)])
+        gui.SetWindowPos.assert_called_once()
+
     def test_wrong_aspect_is_not_resized(self):
         with self.assertRaises(RuntimeError):
             self.run_restore([(0, 0, 800, 700)] * 7)
