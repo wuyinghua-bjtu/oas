@@ -23,7 +23,7 @@ from tasks.Mentorship.navigation import leave_activity_menu
 from tasks.Mentorship.vision import detect
 from tasks.GameUi.page import page_login
 from tasks.Mentorship.battle_pair import clear_verified_statistics
-from tasks.Mentorship.ownership import verify_apprentice_idle
+from tasks.Mentorship.ownership import acquire_apprentice, resume_apprentice
 from tasks.Restart.login import LoginHandler
 
 
@@ -44,6 +44,7 @@ class ScriptTask(BaseTask):
             temp.replace(path)
         save()
         guarded = []
+        apprentice_paused = False
         try:
             options = self.config.model.mentorship.mentorship_config
             apprentice_name = options.apprentice_name.strip()
@@ -52,7 +53,7 @@ class ScriptTask(BaseTask):
                 raise RuntimeError('请填写徒弟角色名和服务器')
             state.update(apprentice=apprentice_name, server=apprentice_server)
             save()
-            verify_apprentice_idle('oas_leveling', self.config.config_name)
+            apprentice_paused = acquire_apprentice('oas_leveling', self.config.config_name)
             inventory = json.loads(subprocess.check_output(
                 [str(MANAGER), 'info', '-v', 'all'], creationflags=subprocess.CREATE_NO_WINDOW))
             configs, devices = [], []
@@ -128,6 +129,8 @@ class ScriptTask(BaseTask):
         finally:
             for device, original in guarded:
                 device.screenshot = original
+            if apprentice_paused:
+                resume_apprentice('oas_leveling')
         if activities is not None:
             raise TaskEnd('Mentorship')
         now = datetime.now()

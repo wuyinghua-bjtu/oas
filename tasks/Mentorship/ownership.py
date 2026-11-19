@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -11,6 +12,48 @@ async def worker_state(port, name):
     async with websockets.connect(f'ws://127.0.0.1:{port}/ws/{name}', open_timeout=5) as connection:
         message = json.loads(await asyncio.wait_for(connection.recv(), 5))
         return message.get('state')
+
+
+def _worker_action(port, profile, action):
+    with urlopen(f'http://127.0.0.1:{port}/{profile}/{action}', timeout=10) as response:
+        response.read()
+
+
+def resume_apprentice(profile):
+    port = int(yaml.safe_load(Path('config/deploy.yaml').read_text(encoding='utf-8'))
+               ['Deploy']['Webui']['WebuiPort'])
+    _worker_action(port, profile, 'start')
+
+
+def acquire_apprentice(profile, owner):
+    port = int(yaml.safe_load(Path('config/deploy.yaml').read_text(encoding='utf-8'))
+               ['Deploy']['Webui']['WebuiPort'])
+    state = asyncio.run(worker_state(port, profile))
+    if state == 0:
+        verify_apprentice_idle(profile, owner)
+        return False
+    if state != 1:
+        raise RuntimeError('徒弟脚本状态异常，不能接管')
+    for attempt in range(2):
+        raw = json.loads((Path('config') / f'{profile}.json').read_text(encoding='utf-8'))
+        if raw.get('running_task') != '':
+            raise RuntimeError('徒弟正在执行任务，不能接管')
+        if attempt == 0:
+            time.sleep(1)
+    paused = False
+    try:
+        _worker_action(port, profile, 'stop')
+        paused = True
+        for attempt in range(10):
+            if asyncio.run(worker_state(port, profile)) == 0:
+                verify_apprentice_idle(profile, owner)
+                return True
+            time.sleep(.5)
+        raise RuntimeError('徒弟空闲监听未确认暂停')
+    except Exception:
+        if paused:
+            resume_apprentice(profile)
+        raise
 
 
 def verify_apprentice_idle(profile, owner):

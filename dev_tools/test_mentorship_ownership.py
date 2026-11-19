@@ -3,10 +3,55 @@ import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from tasks.Mentorship.ownership import verify_apprentice_idle
+from tasks.Mentorship.ownership import verify_apprentice_idle, acquire_apprentice
 
 
 class OwnershipTests(unittest.TestCase):
+    def acquire(self, marker, states):
+        def read(path, **kwargs):
+            if path.name == 'deploy.yaml':
+                return 'Deploy:\n  Webui:\n    WebuiPort: 22288\n'
+            return json.dumps({'running_task': marker})
+        with patch('tasks.Mentorship.ownership.Path.read_text', read), \
+             patch('tasks.Mentorship.ownership.worker_state', AsyncMock(side_effect=states)), \
+             patch('tasks.Mentorship.ownership._worker_action') as action, \
+             patch('tasks.Mentorship.ownership.verify_apprentice_idle') as verify, \
+             patch('tasks.Mentorship.ownership.time.sleep'):
+            result = acquire_apprentice('oas_leveling', 'oas1')
+            return result, action, verify
+
+    def test_idle_listener_is_paused_and_verified(self):
+        result, action, verify = self.acquire('', [1, 0])
+        self.assertTrue(result)
+        action.assert_called_once_with(22288, 'oas_leveling', 'stop')
+        verify.assert_called_once_with('oas_leveling', 'oas1')
+
+    def test_stopped_worker_needs_no_pause(self):
+        result, action, verify = self.acquire('old', [0])
+        self.assertFalse(result)
+        action.assert_not_called()
+        verify.assert_called_once()
+
+    def test_busy_apprentice_is_never_stopped(self):
+        with patch('tasks.Mentorship.ownership._worker_action') as action:
+            with self.assertRaisesRegex(RuntimeError, '正在执行'):
+                self.acquire('FindJade', [1])
+            action.assert_not_called()
+
+    def test_failed_exclusive_check_restores_listener(self):
+        def read(path, **kwargs):
+            if path.name == 'deploy.yaml':
+                return 'Deploy:\n  Webui:\n    WebuiPort: 22288\n'
+            return json.dumps({'running_task': ''})
+        with patch('tasks.Mentorship.ownership.Path.read_text', read), \
+             patch('tasks.Mentorship.ownership.worker_state', AsyncMock(side_effect=[1, 0])), \
+             patch('tasks.Mentorship.ownership._worker_action') as action, \
+             patch('tasks.Mentorship.ownership.verify_apprentice_idle', side_effect=RuntimeError('busy')), \
+             patch('tasks.Mentorship.ownership.time.sleep'):
+            with self.assertRaisesRegex(RuntimeError, 'busy'):
+                acquire_apprentice('oas_leveling', 'oas1')
+            self.assertEqual([call.args[2] for call in action.call_args_list], ['stop', 'start'])
+
     def verify(self, states, extra=None):
         configs = {
             'oas_leveling': {'running_task': 'GroupedAwakening',
