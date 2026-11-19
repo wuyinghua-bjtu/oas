@@ -55,6 +55,29 @@ def require_team_devices(inventory, titles):
     return devices
 
 
+def wait_group_room(task, players, invitation, record, save):
+    for attempt in range(2):
+        for player in players:
+            player.device.stuck_record_clear()
+        try:
+            task.wait_room(players)
+            return
+        except GameStuckError:
+            if attempt or record.get('battle_in_progress'):
+                raise
+            for player in players:
+                player.step('重新组队前核验角色', 120)
+                player.device.stuck_record_clear()
+                if player.nickname() != player.expected_name:
+                    raise GameStuckError('重新组队前角色不符：' + player.expected_name)
+            record.setdefault('room_recoveries', []).append({
+                'completed': record['completed'],
+                'time': datetime.now().isoformat(timespec='seconds')})
+            save()
+            logger.warning('已结算后组队超时，核实全队身份后重新创建私人房间一次')
+            task.invite_with_refresh(players, invitation, record, save)
+
+
 def resumable_today(record, today):
     return (record.get('date') == today and
             record.get('status') not in ('完成', '完成（有失败）'))
@@ -619,7 +642,7 @@ class ScriptTask(TeamTask):
                 for round_index in range(entry['completed'], 15):
                     for retry in range(1):
                         stage = f'第{group_index+1}组第{round_index+1}场组队'
-                        self.wait_room(active)
+                        wait_group_room(self, active, invitation, entry, save)
                         for participant in active:
                             participant.step(stage + '战斗及结算', 300)
                         leader.screenshot()

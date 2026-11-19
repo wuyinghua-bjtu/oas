@@ -1,6 +1,8 @@
 import ast
 import unittest
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import Mock
 
 
 class DevicePreflightTests(unittest.TestCase):
@@ -9,8 +11,8 @@ class DevicePreflightTests(unittest.TestCase):
         self.tree = ast.parse(source)
         nodes = [node for node in self.tree.body
                  if isinstance(node, (ast.ClassDef, ast.FunctionDef))
-                 and node.name in ('TeamDevicesUnavailable', 'require_team_devices')]
-        self.scope = {'GameStuckError': RuntimeError}
+                 and node.name in ('TeamDevicesUnavailable', 'require_team_devices', 'wait_group_room')]
+        self.scope = {'GameStuckError': RuntimeError, 'datetime': datetime, 'logger': Mock()}
         exec(compile(ast.Module(body=nodes, type_ignores=[]), '<preflight>', 'exec'), self.scope)
 
     def test_returns_exact_devices_in_requested_order(self):
@@ -43,6 +45,48 @@ class DevicePreflightTests(unittest.TestCase):
         self.assertIn("record['status'] = '等待设备'", branch)
         self.assertIn('scheduler.enable = False', branch)
         self.assertIsInstance(checks[0].body[-1], ast.Raise)
+
+    def test_room_timeout_reforms_once_after_identity_verification(self):
+        task = Mock()
+        task.wait_room.side_effect = [RuntimeError('timeout'), None]
+        player = Mock(expected_name='member')
+        player.nickname.return_value = 'member'
+        record = {'completed': 5}
+        save = Mock()
+        self.scope['wait_group_room'](task, [player], 'invitation', record, save)
+        self.assertEqual(task.wait_room.call_count, 2)
+        task.invite_with_refresh.assert_called_once_with([player], 'invitation', record, save)
+        self.assertEqual(record['completed'], 5)
+        self.assertEqual(len(record['room_recoveries']), 1)
+
+    def test_active_battle_never_reforms(self):
+        task = Mock()
+        task.wait_room.side_effect = RuntimeError('timeout')
+        player = Mock()
+        with self.assertRaises(RuntimeError):
+            self.scope['wait_group_room'](task, [player], None,
+                                           {'completed': 5, 'battle_in_progress': True}, Mock())
+        player.nickname.assert_not_called()
+        task.invite_with_refresh.assert_not_called()
+
+    def test_wrong_identity_never_reforms(self):
+        task = Mock()
+        task.wait_room.side_effect = RuntimeError('timeout')
+        player = Mock(expected_name='member')
+        player.nickname.return_value = 'other'
+        with self.assertRaises(RuntimeError):
+            self.scope['wait_group_room'](task, [player], None, {'completed': 5}, Mock())
+        task.invite_with_refresh.assert_not_called()
+
+    def test_second_timeout_does_not_loop(self):
+        task = Mock()
+        task.wait_room.side_effect = RuntimeError('timeout')
+        player = Mock(expected_name='member')
+        player.nickname.return_value = 'member'
+        with self.assertRaises(RuntimeError):
+            self.scope['wait_group_room'](task, [player], None, {'completed': 5}, Mock())
+        self.assertEqual(task.wait_room.call_count, 2)
+        self.assertEqual(task.invite_with_refresh.call_count, 1)
 
 
 if __name__ == '__main__':
