@@ -80,13 +80,13 @@ class PairBattle:
             return True
         if Battle.I_FALSE.match(frame):
             raise RuntimeError('师徒副本战斗失败')
-        if guardian:
+        if not stone_leader:
             reader = RuleOcr(roi=(80, 200, 1120, 515), area=(80, 200, 1120, 515),
                              mode='Full', method='Default', keyword='', name='guardian_settlement')
             words = ''.join(row.ocr_text for row in reader.detect_and_ocr(frame)).replace(' ', '')
             if '点击屏幕继续' in words and words.upper().count('EXP') >= 3:
                 side.win_seen = True
-                self._click(side, 640, 695, 'mentorship_guard_victory', interval=1.5)
+                self._click(side, 640, 695, 'mentorship_result_continue', interval=1.5)
                 return False
         if stone_leader and side.ready_clicked and not side.exited:
             if Battle.I_EXIT_ENSURE.match(frame):

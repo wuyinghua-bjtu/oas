@@ -78,6 +78,7 @@ class MasterBuffs:
     def set(self, name, enabled, timeout=25):
         if name not in _RULES:
             return False
+        self.master.stuck_record_clear()
         target = 'on' if enabled else 'off'
         for _ in range(2):
             if not self._panel(True):
