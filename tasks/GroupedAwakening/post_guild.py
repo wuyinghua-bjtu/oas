@@ -149,7 +149,25 @@ def finish_account(task, name, data, entry, save):
 def material_selection(task):
     text = _words(task, (500,45,270,65))
     match = re.search(r'将提交([0-9]+)次', text)
-    return int(match.group(1)) if match else None
+    if match:
+        return int(match.group(1))
+    box = (280, 80, 740, 570)
+    reader = RuleOcr(roi=box, area=box, mode='Full', method='Default',
+                     keyword='', name='post_material_rows')
+    rows = reader.detect_and_ocr(task.device.image)
+    labels = ''.join(row.ocr_text for row in rows).replace(' ', '')
+    if not all(label in labels for label in ('业火轮', '风转符', '水灵鲤', '天雷鼓', '提交')):
+        return None
+    selected = []
+    for height in (106, 228, 350, 474):
+        candidates = [re.fullmatch(r'([0-9]+)/([0-9]+)', row.ocr_text.replace(' ', ''))
+                      for row in rows if abs(float(row.box[:, 1].mean()) - height) < 20
+                      and 130 < float(row.box[:, 0].mean()) < 250]
+        values = [match for match in candidates if match]
+        if len(values) != 1 or int(values[0].group(1)) > int(values[0].group(2)):
+            return None
+        selected.append(int(values[0].group(1)))
+    return sum(selected)
 
 
 def read_material_selection(task, timeout=12):
