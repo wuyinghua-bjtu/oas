@@ -25,21 +25,19 @@ def finish_account(task, name, data, entry, save):
  def click(x,y,n,delay=1):d.click(x,y,control_name=n);time.sleep(delay)
  def read_jade_balance():
   readings=[]
-  for i in range(2):
+  for i in range(3):
    snap()
-   text=rule((733,12,58,34),'Single').ocr(d.image).strip().lstrip('_:：').strip()
-   digit=rule((733,12,58,34),'Digit').ocr(d.image)
+   text=rule((710,12,82,34),'Single').ocr(d.image).strip().lstrip('_:：').strip()
+   digit=rule((710,12,82,34),'Digit').ocr(d.image)
    readings.append((text,digit))
    time.sleep(.2)
-  if readings[0]!=readings[1]:
+  if any(reading != readings[0] for reading in readings[1:]):
    print('勾玉余额识别不稳定，跳过捐赠',readings,flush=True);return None
   text,digit=readings[0]
   match=re.fullmatch(r'([^0-9]*)([0-9]+)',text)
   if not match:
    print('勾玉余额识别不完整，跳过捐赠',readings,flush=True);return None
   prefix,numerals=match.groups();value=int(numerals)
-  if value<100 and digit<100:
-   return value
   if prefix or value!=digit:
    print('勾玉余额识别不一致，跳过捐赠',readings,flush=True);return None
   return value
