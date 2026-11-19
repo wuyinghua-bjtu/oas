@@ -47,6 +47,17 @@ class WantedDetailRoutesTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(normalize_wanted_route_type(text), text)
 
+    def test_anmeng_is_excluded_at_every_floor(self):
+        for floor in ('壹', '伍', '拾', '番外'):
+            with self.subTest(floor=floor):
+                self.assertIsNone(parse_wanted_route(f'安梦奇缘·{floor}(数量:3)'))
+        self.assertIsNone(parse_wanted_route('安 梦奇缘·伍(数量:3)'))
+
+    def test_other_routes_remain_available(self):
+        for destination in ('第二十五章', '海怪的温柔·肆'):
+            with self.subTest(destination=destination):
+                self.assertEqual(parse_wanted_route(f'{destination}(数量:3)'), (destination, 3))
+
 
 if __name__ == '__main__':
     unittest.main()

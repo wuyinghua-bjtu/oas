@@ -356,6 +356,9 @@ def sender_routes(self, image, challenge_tickets):
         if not match or int(match.group(2)) < 1:
             continue
         destination = match.group(1)
+        if '安梦奇缘' in ''.join(destination.split()):
+            logger.info('FindJade skipped excluded bounty destination: %s', destination)
+            continue
         if kind == '秘闻' and any(destination.endswith(layer) for layer in excluded_layers):
             continue
         order = -1 if fragment else priority.index(kind)

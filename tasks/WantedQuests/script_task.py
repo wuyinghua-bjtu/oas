@@ -49,7 +49,11 @@ def parse_wanted_route(text):
     match = re.fullmatch(r'(.*?)\s*\(?数量:\s*(\d+)\s*\)*', text)
     if not match or not match.group(1).strip() or int(match.group(2)) <= 0:
         return None
-    return match.group(1).strip(), int(match.group(2))
+    destination = match.group(1).strip()
+    if '安梦奇缘' in ''.join(destination.split()):
+        logger.info('Skip excluded bounty destination: %s', destination)
+        return None
+    return destination, int(match.group(2))
 
 
 def normalize_wanted_route_type(text):
