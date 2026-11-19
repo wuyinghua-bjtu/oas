@@ -102,7 +102,7 @@ def complete_courtyard_affairs(config, device, timeout=90):
                           method='Default', keyword='', name='guild_daily_fortune')
         text = ''.join(row.ocr_text for row in fortune.detect_and_ocr(device.image)).replace(' ', '')
         if '累计奖励' in text and re.search(r'第\d+签', text):
-            device.click(1000,550,control_name='guild_daily_fortune_close')
+            device.click(640,690,control_name='guild_daily_fortune_close')
             device.stuck_record_clear()
             sleep(.5)
             continue
